@@ -2,7 +2,15 @@ import { useState } from 'react'
 import { AlertTriangle, LoaderCircle, X } from 'lucide-react'
 import Modal from './Modal.jsx'
 
-export default function DeleteProductDialog({ open, product, onSubmit, onClose }) {
+export default function DeleteProductDialog({
+  open,
+  product,
+  title = 'Nonaktifkan Produk',
+  description = 'Yakin ingin menonaktifkan produk ini?',
+  confirmLabel = 'Hapus',
+  onSubmit,
+  onClose,
+}) {
   const [submitting, setSubmitting] = useState(false)
 
   const handleConfirm = async () => {
@@ -10,6 +18,8 @@ export default function DeleteProductDialog({ open, product, onSubmit, onClose }
     setSubmitting(true)
     try {
       await onSubmit(product)
+    } catch {
+      // Toast error sudah ditampilkan halaman induk; dialog sengaja tetap terbuka.
     } finally {
       setSubmitting(false)
     }
@@ -26,7 +36,7 @@ export default function DeleteProductDialog({ open, product, onSubmit, onClose }
     >
       <div className="flex items-start justify-between gap-4 border-b border-pink-mist px-5 py-4">
         <h2 id="delete-product-title" className="text-base font-bold text-ink">
-          Nonaktifkan Produk
+          {title}
         </h2>
         <button
           type="button"
@@ -45,7 +55,7 @@ export default function DeleteProductDialog({ open, product, onSubmit, onClose }
           </span>
           <div>
             <p id="delete-product-description" className="text-sm font-semibold text-ink">
-              Yakin ingin menonaktifkan produk ini?
+              {description}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-ink-muted">
               <span className="font-semibold text-ink">{product?.name ?? '-'}</span>{' '}
@@ -73,7 +83,7 @@ export default function DeleteProductDialog({ open, product, onSubmit, onClose }
           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-error px-4 text-sm font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-error/20 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {submitting && <LoaderCircle className="size-4 animate-spin" />}
-          Hapus
+          {confirmLabel}
         </button>
       </div>
     </Modal>

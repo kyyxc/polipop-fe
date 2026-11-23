@@ -1,4 +1,11 @@
-import { ChevronLeft, ChevronRight, LogOut, Store, X } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  LoaderCircle,
+  LogOut,
+  Store,
+  X,
+} from 'lucide-react'
 import {
   isActiveRoute,
   mainNavigation,
@@ -62,6 +69,7 @@ export default function Sidebar({
   activeRoute,
   onNavigate,
   onLogout,
+  loggingOut = false,
 }) {
   return (
     <>
@@ -174,15 +182,22 @@ export default function Sidebar({
             <button
               type="button"
               onClick={onLogout}
+              disabled={loggingOut}
               title={collapsed ? 'Keluar' : undefined}
               className={[
                 'mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-muted transition-colors',
-                'hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/40',
+                'hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/40 disabled:cursor-not-allowed disabled:opacity-60',
                 collapsed ? 'lg:justify-center lg:px-0' : '',
               ].join(' ')}
             >
-              <LogOut className="size-[18px] shrink-0" />
-              <span className={collapsed ? 'lg:hidden' : ''}>Keluar</span>
+              {loggingOut ? (
+                <LoaderCircle className="size-[18px] shrink-0 animate-spin" />
+              ) : (
+                <LogOut className="size-[18px] shrink-0" />
+              )}
+              <span className={collapsed ? 'lg:hidden' : ''}>
+                {loggingOut ? 'Keluar...' : 'Keluar'}
+              </span>
             </button>
           )}
 

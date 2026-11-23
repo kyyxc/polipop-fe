@@ -12,6 +12,7 @@ import {
   Store,
   UserRound,
 } from 'lucide-react'
+import { login } from '../lib/authService.js'
 
 const accessSteps = [
   {
@@ -150,12 +151,10 @@ export default function LoginPage({ onSuccess }) {
   const [errors, setErrors] = useState({})
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(false)
-  const submitTimer = useRef(null)
   const redirectTimer = useRef(null)
 
   useEffect(
     () => () => {
-      clearTimeout(submitTimer.current)
       clearTimeout(redirectTimer.current)
     },
     [],
@@ -167,8 +166,10 @@ export default function LoginPage({ onSuccess }) {
     return () => clearTimeout(timer)
   }, [status])
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
+    if (loading) return
+
     const nextErrors = {}
 
     if (!username.trim()) {
@@ -176,8 +177,6 @@ export default function LoginPage({ onSuccess }) {
     }
     if (!password) {
       nextErrors.password = 'Password wajib diisi.'
-    } else if (password.length < 6) {
-      nextErrors.password = 'Password minimal 6 karakter.'
     }
 
     setErrors(nextErrors)
@@ -192,8 +191,14 @@ export default function LoginPage({ onSuccess }) {
 
     setStatus(null)
     setLoading(true)
-    submitTimer.current = setTimeout(() => {
-      setLoading(false)
+
+    try {
+      await login({
+        username: username.trim(),
+        password,
+        rememberMe: remember,
+      })
+
       setStatus({
         type: 'success',
         message: 'Login berhasil. Membuka dashboard kasir...',
@@ -201,7 +206,15 @@ export default function LoginPage({ onSuccess }) {
       if (onSuccess) {
         redirectTimer.current = setTimeout(onSuccess, 700)
       }
-    }, 900)
+    } catch (error) {
+      setErrors(error.fieldErrors ?? {})
+      setStatus({
+        type: 'error',
+        message: error.message || 'Login gagal. Silakan coba lagi.',
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const StatusIcon = status ? statusStyles[status.type].icon : null
@@ -318,8 +331,8 @@ export default function LoginPage({ onSuccess }) {
 
           {status && (
             <div
-              role="status"
-              aria-live="polite"
+              role={status.type === 'error' ? 'alert' : 'status'}
+              aria-live={status.type === 'error' ? 'assertive' : 'polite'}
               className={`mt-5 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-xs leading-relaxed text-ink ${statusStyles[status.type].wrapper}`}
             >
               <StatusIcon
@@ -338,7 +351,10 @@ export default function LoginPage({ onSuccess }) {
               autoComplete="username"
               placeholder="Masukkan username kasir"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => {
+                setUsername(event.target.value)
+                setErrors((current) => ({ ...current, username: undefined }))
+              }}
               error={errors.username}
             />
 
@@ -350,7 +366,10 @@ export default function LoginPage({ onSuccess }) {
               autoComplete="current-password"
               placeholder="Masukkan password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                setErrors((current) => ({ ...current, password: undefined }))
+              }}
               error={errors.password}
               trailing={<VisibilityToggle visible={showPassword} onToggle={() => setShowPassword((value) => !value)} />}
             />

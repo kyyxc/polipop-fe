@@ -44,6 +44,7 @@ function seedHistory(product, stock) {
       id: `stock-${product.id}-initial`,
       type: 'initial_stock',
       quantity: stock,
+      quantityChange: stock,
       previousStock: 0,
       stockAfter: stock,
       notes: 'Stok awal produk',
@@ -298,6 +299,44 @@ export async function getProductById(id) {
   return product
 }
 
+// Simulasi GET /products/:id/mutations dengan filter type/tanggal + pagination.
+export async function getProductMutations(id, filters = {}) {
+  await delay(350)
+  const product = await getProductById(id)
+  const allowedTypes = ['masuk', 'keluar', 'penyesuaian', 'initial_stock']
+  const type = allowedTypes.includes(filters.type) ? filters.type : ''
+  const startDate = filters.start_date ? String(filters.start_date) : ''
+  const endDate = filters.end_date ? String(filters.end_date) : ''
+
+  const matched = [...product.history]
+    .filter((entry) => !type || entry.type === type)
+    .filter((entry) => {
+      const date = String(entry.createdAt).slice(0, 10)
+      if (startDate && date < startDate) return false
+      if (endDate && date > endDate) return false
+      return true
+    })
+    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
+
+  const perPage = PER_PAGE_OPTIONS.includes(Number(filters.per_page))
+    ? Number(filters.per_page)
+    : 10
+  const totalPages = Math.max(1, Math.ceil(matched.length / perPage))
+  const requestedPage = Number(filters.page)
+  const page =
+    Number.isFinite(requestedPage) && requestedPage > 0
+      ? Math.min(Math.floor(requestedPage), totalPages)
+      : 1
+
+  return {
+    items: matched.slice((page - 1) * perPage, page * perPage),
+    total: matched.length,
+    page,
+    perPage,
+    totalPages,
+  }
+}
+
 // Simulasi GET /api/categories yang dipakai form produk.
 export async function getActiveCategories() {
   await delay(300)
@@ -336,6 +375,7 @@ export async function createProduct(payload) {
         id: `stock-${id}-initial`,
         type: 'initial_stock',
         quantity: stock,
+        quantityChange: stock,
         previousStock: 0,
         stockAfter: stock,
         notes: 'Stok awal produk',
@@ -406,7 +446,7 @@ export async function adjustStock(id, payload) {
   const quantity = Number(payload.quantity)
   const product = products[index]
 
-  if (type !== 'masuk' && type !== 'keluar') {
+  if (type !== 'masuk' && type !== 'keluar' && type !== 'penyesuaian') {
     fields.type = 'Jenis mutasi wajib dipilih'
   }
   if (
@@ -424,12 +464,24 @@ export async function adjustStock(id, payload) {
   assertNoErrors(fields)
 
   const now = new Date().toISOString()
-  const stockAfter =
-    type === 'masuk' ? product.stock + quantity : product.stock - quantity
+  let stockAfter
+  let quantityChange
+  if (type === 'masuk') {
+    stockAfter = product.stock + quantity
+    quantityChange = quantity
+  } else if (type === 'keluar') {
+    stockAfter = product.stock - quantity
+    quantityChange = -quantity
+  } else {
+    // `penyesuaian` menerima quantity sebagai jumlah stok akhir yang diinginkan.
+    stockAfter = quantity
+    quantityChange = quantity - product.stock
+  }
   const mutation = {
     id: `stock-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     type,
     quantity,
+    quantityChange,
     previousStock: product.stock,
     stockAfter,
     notes: String(payload.notes ?? '').trim(),
@@ -497,6 +549,7 @@ export function recordSaleStock(paidItems = []) {
           id: `stock-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           type: 'keluar',
           quantity,
+          quantityChange: stockAfter - product.stock,
           previousStock: product.stock,
           stockAfter,
           notes: 'Penjualan',

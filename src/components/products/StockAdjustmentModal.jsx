@@ -23,6 +23,7 @@ function FieldError({ id, message }) {
 export default function StockAdjustmentModal({
   open,
   product,
+  allowAdjustment = false,
   onSubmit,
   onClose,
 }) {
@@ -40,13 +41,20 @@ export default function StockAdjustmentModal({
       ? parsedQuantity
       : 0
   const previewStock =
-    type === 'keluar'
-      ? Math.max(0, currentStock - validQuantity)
-      : currentStock + validQuantity
+    type === 'penyesuaian'
+      ? validQuantity
+      : type === 'keluar'
+        ? Math.max(0, currentStock - validQuantity)
+        : currentStock + validQuantity
+  const quantityLabel =
+    type === 'penyesuaian' ? 'Stok Akhir' : 'Quantity'
 
   const validate = () => {
     const nextErrors = {}
-    if (type !== 'masuk' && type !== 'keluar') {
+    const allowedTypes = allowAdjustment
+      ? ['masuk', 'keluar', 'penyesuaian']
+      : ['masuk', 'keluar']
+    if (!allowedTypes.includes(type)) {
       nextErrors.type = 'Jenis mutasi wajib dipilih'
     }
     if (quantity === '' || !Number.isInteger(parsedQuantity) || parsedQuantity < 1) {
@@ -138,13 +146,16 @@ export default function StockAdjustmentModal({
             >
               <option value="masuk">Tambah Stok (masuk)</option>
               <option value="keluar">Kurangi Stok (keluar)</option>
+              {allowAdjustment && (
+                <option value="penyesuaian">Penyesuaian (stok akhir)</option>
+              )}
             </select>
             <FieldError id="stock-type-error" message={errors.type} />
           </div>
 
           <div>
             <label htmlFor="stock-quantity" className="block text-xs font-semibold text-ink">
-              Quantity <span className="text-error">*</span>
+              {quantityLabel} <span className="text-error">*</span>
             </label>
             <input
               id="stock-quantity"
@@ -191,13 +202,21 @@ export default function StockAdjustmentModal({
             </p>
             <p className="mt-1 text-sm font-semibold text-ink">
               {currentStock} {unit}
-              <span className="mx-2 text-pink-dark" aria-hidden="true">
-                {type === 'masuk' ? '+' : '−'}
-              </span>
-              {validQuantity} {unit}
-              <span className="mx-2 text-ink-muted" aria-hidden="true">
-                =
-              </span>
+              {type === 'penyesuaian' ? (
+                <span className="mx-2 text-pink-dark" aria-hidden="true">
+                  →
+                </span>
+              ) : (
+                <>
+                  <span className="mx-2 text-pink-dark" aria-hidden="true">
+                    {type === 'masuk' ? '+' : '−'}
+                  </span>
+                  {validQuantity} {unit}
+                  <span className="mx-2 text-ink-muted" aria-hidden="true">
+                    =
+                  </span>
+                </>
+              )}
               <span className="font-bold text-pink-dark">
                 {previewStock} {unit}
               </span>

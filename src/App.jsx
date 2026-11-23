@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import AppShell from './components/layout/AppShell.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
+import { useToast } from './components/ui/toast-context.js'
 import { CartProvider } from './context/CartContext.jsx'
 import { findNavItem } from './config/navigation.js'
+import { logout } from './lib/authService.js'
+import AccountPage from './pages/AccountPage.jsx'
 import CategoryPage from './pages/CategoryPage.jsx'
 import KasirPage from './pages/KasirPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -13,20 +16,17 @@ import QrPage from './pages/QrPage.jsx'
 import TransactionDetailPage from './pages/TransactionDetailPage.jsx'
 import TransactionsPage from './pages/TransactionsPage.jsx'
 
-const placeholderRoutes = new Set([
-  '/discounts',
-  '/accounts',
-  '/inventory',
-  '/settings',
-])
+const placeholderRoutes = new Set(['/discounts', '/inventory', '/settings'])
 
 function currentRoute() {
   const hash = window.location.hash.replace(/^#/, '') || '/'
   return hash.split('?')[0]
 }
 
-function App() {
+function AppRouter() {
+  const { showToast } = useToast()
   const [route, setRoute] = useState(currentRoute)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     const handleHashChange = () => setRoute(currentRoute())
@@ -39,6 +39,19 @@ function App() {
     setRoute(currentRoute())
   }
 
+  const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await logout()
+    } catch (error) {
+      showToast('error', error.message || 'Gagal keluar. Silakan coba lagi.')
+    } finally {
+      setLoggingOut(false)
+      navigate('/login')
+    }
+  }
+
   let content
 
   if (route === '/login') {
@@ -48,9 +61,12 @@ function App() {
       <AppShell
         route={route}
         onNavigate={navigate}
-        onLogout={() => navigate('/login')}
+        onLogout={handleLogout}
+        loggingOut={loggingOut}
       >
-        {route.startsWith('/products/') ? (
+        {route === '/accounts' ? (
+          <AccountPage />
+        ) : route.startsWith('/products/') ? (
           <ProductDetailPage
             productId={decodeURIComponent(route.split('/')[2] ?? '')}
             onNavigate={navigate}
@@ -77,11 +93,15 @@ function App() {
     )
   }
 
+  return content
+}
+
+export default function App() {
   return (
     <ToastProvider>
-      <CartProvider>{content}</CartProvider>
+      <CartProvider>
+        <AppRouter />
+      </CartProvider>
     </ToastProvider>
   )
 }
-
-export default App

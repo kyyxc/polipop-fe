@@ -5,7 +5,13 @@ import Sidebar from './Sidebar.jsx'
 
 const STORAGE_KEY = 'polipop-sidebar-collapsed'
 
-export default function AppShell({ route, onNavigate, onLogout, children }) {
+export default function AppShell({
+  route,
+  onNavigate,
+  onLogout,
+  loggingOut = false,
+  children,
+}) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) === 'true'
@@ -48,6 +54,7 @@ export default function AppShell({ route, onNavigate, onLogout, children }) {
         activeRoute={route}
         onNavigate={handleNavigate}
         onLogout={onLogout}
+        loggingOut={loggingOut}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
