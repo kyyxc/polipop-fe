@@ -112,8 +112,6 @@ export default function KasirPage() {
       const paidItems = cart.map((item) => ({ ...item }))
       const no = createTransactionNo()
 
-      decrementStock(paidItems)
-
       const transaction = {
         id: no,
         no,
@@ -128,6 +126,7 @@ export default function KasirPage() {
         createdAt: new Date().toISOString(),
       }
 
+      decrementStock(paidItems, transaction)
       saveTransaction(transaction)
 
       setSuccess(transaction)

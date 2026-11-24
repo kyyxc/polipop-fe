@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, LoaderCircle, X } from 'lucide-react'
+import { FORM_ERROR_CODES } from '../../lib/categoryService.js'
 
 export default function CategoryFormModal({
   open,
   mode,
   initialName = '',
-  existingNames = [],
   onSubmit,
   onClose,
 }) {
@@ -41,8 +41,8 @@ export default function CategoryFormModal({
       inputRef.current?.focus()
       return
     }
-    if (existingNames.includes(trimmed.toLocaleLowerCase('id-ID'))) {
-      setError('Nama kategori sudah digunakan')
+    if (trimmed.length > 100) {
+      setError('Nama kategori maksimal 100 karakter.')
       inputRef.current?.focus()
       return
     }
@@ -52,11 +52,7 @@ export default function CategoryFormModal({
     try {
       await onSubmit(trimmed)
     } catch (err) {
-      if (
-        err.code === 'VALIDATION' ||
-        err.code === 'DUPLICATE' ||
-        err.code === 'NOT_FOUND'
-      ) {
+      if (FORM_ERROR_CODES.has(err.code)) {
         setError(err.message)
       }
       // Error server sudah diberikan lewat toast oleh halaman induk.
@@ -105,6 +101,7 @@ export default function CategoryFormModal({
             type="text"
             value={name}
             disabled={submitting}
+            maxLength={100}
             onChange={(event) => {
               setName(event.target.value)
               if (error) setError('')

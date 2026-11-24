@@ -9,6 +9,11 @@ import {
 } from 'lucide-react'
 import Pagination from '../components/categories/Pagination.jsx'
 import TransactionTable from '../components/transactions/TransactionTable.jsx'
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+} from '../components/ui/DropdownMenu.jsx'
+import Select from '../components/ui/Select.jsx'
 import { buildHash, readQueryParams } from '../lib/hashQuery.js'
 import {
   downloadTransactionsExcel,
@@ -70,7 +75,6 @@ export default function TransactionsPage({ onNavigate }) {
   const [searchInput, setSearchInput] = useState(filters.q)
   const [dateError, setDateError] = useState('')
   const [datePanelOpen, setDatePanelOpen] = useState(false)
-  const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exporting, setExporting] = useState(null)
   const [exportError, setExportError] = useState('')
   const [transactions, setTransactions] = useState([])
@@ -162,7 +166,6 @@ export default function TransactionsPage({ onNavigate }) {
   }
 
   const handleExport = async (format) => {
-    setExportMenuOpen(false)
     setExportError('')
     setExporting(format)
     try {
@@ -181,9 +184,6 @@ export default function TransactionsPage({ onNavigate }) {
 
   const primaryExportClass =
     'inline-flex h-10 items-center gap-2 rounded-xl border border-pink-mist bg-surface px-3.5 text-xs font-semibold text-ink-muted transition hover:border-pink-primary hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary disabled:cursor-not-allowed disabled:opacity-50'
-  const menuExportClass =
-    'flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-ink-muted transition hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-pink-primary disabled:cursor-not-allowed disabled:opacity-50'
-
   return (
     <main className="mx-auto w-full max-w-7xl px-4 pb-10 pt-6 lg:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -216,49 +216,29 @@ export default function TransactionsPage({ onNavigate }) {
             </ExportButton>
           </div>
 
-          <div className="relative sm:hidden">
-            <button
-              type="button"
-              onClick={() => setExportMenuOpen((open) => !open)}
-              aria-expanded={exportMenuOpen}
-              aria-haspopup="menu"
-              disabled={Boolean(exporting)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-pink-dark px-4 text-xs font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-pink-light disabled:cursor-not-allowed disabled:opacity-50"
+          <DropdownMenu
+            label="Export"
+            icon={FileText}
+            loading={Boolean(exporting)}
+            variant="primary"
+            className="w-36 sm:hidden"
+            menuClassName="w-44"
+          >
+            <DropdownMenuItem
+              icon={exporting === 'pdf' ? LoaderCircle : FileText}
+              iconClassName={exporting === 'pdf' ? 'animate-spin' : ''}
+              onSelect={() => handleExport('pdf')}
             >
-              {exporting ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <FileText className="size-4" />
-              )}
-              Export
-              <ChevronDown className="size-4" />
-            </button>
-            {exportMenuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-xl border border-pink-mist bg-surface py-1 shadow-xl"
-              >
-                <ExportButton
-                  format="pdf"
-                  activeFormat={exporting}
-                  onClick={handleExport}
-                  className={menuExportClass}
-                  role="menuitem"
-                >
-                  Export PDF
-                </ExportButton>
-                <ExportButton
-                  format="xlsx"
-                  activeFormat={exporting}
-                  onClick={handleExport}
-                  className={menuExportClass}
-                  role="menuitem"
-                >
-                  Export Excel
-                </ExportButton>
-              </div>
-            )}
-          </div>
+              Export PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              icon={exporting === 'xlsx' ? LoaderCircle : FileSpreadsheet}
+              iconClassName={exporting === 'xlsx' ? 'animate-spin' : ''}
+              onSelect={() => handleExport('xlsx')}
+            >
+              Export Excel
+            </DropdownMenuItem>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -356,8 +336,9 @@ export default function TransactionsPage({ onNavigate }) {
             >
               Per halaman
             </label>
-            <select
+            <Select
               id="transaction-per-page"
+              className="mt-1.5 w-full"
               value={filters.perPage}
               onChange={(event) =>
                 setFilters((current) => ({
@@ -366,14 +347,13 @@ export default function TransactionsPage({ onNavigate }) {
                   page: 1,
                 }))
               }
-              className="mt-1.5 h-11 w-full rounded-xl border border-pink-mist bg-surface px-3 text-sm text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
             >
               {PER_PAGE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 

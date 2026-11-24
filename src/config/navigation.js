@@ -1,7 +1,8 @@
 import {
   BadgePercent,
-  Boxes,
+  History,
   LayoutGrid,
+  MessageCircleWarning,
   Package,
   ReceiptText,
   ScanQrCode,
@@ -9,6 +10,7 @@ import {
   ShoppingCart,
   UsersRound,
 } from 'lucide-react'
+import { ADMIN_WHATSAPP_REPORT_URL } from './contact.js'
 
 export const mainNavigation = [
   { label: 'Kasir', route: '/', icon: ShoppingCart, badge: 'Utama' },
@@ -17,17 +19,23 @@ export const mainNavigation = [
   { label: 'Diskon', route: '/discounts', icon: BadgePercent },
   { label: 'Kategori', route: '/categories', icon: LayoutGrid },
   { label: 'Akun', route: '/accounts', icon: UsersRound },
-  { label: 'Inventori', route: '/inventory', icon: Boxes },
+  { label: 'Riwayat Stok', route: '/stock/history', icon: History },
   { label: 'Transaksi', route: '/transactions', icon: ReceiptText },
 ]
 
 export const secondaryNavigation = [
   { label: 'Pengaturan', route: '/settings', icon: Settings2 },
+  {
+    label: 'Laporkan masalah',
+    href: ADMIN_WHATSAPP_REPORT_URL,
+    icon: MessageCircleWarning,
+  },
 ]
 
 export const navigation = [...mainNavigation, ...secondaryNavigation]
 
 export function isActiveRoute(route, itemRoute) {
+  if (!itemRoute) return false
   return route === itemRoute || route.startsWith(`${itemRoute}/`)
 }
 

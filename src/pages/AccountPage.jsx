@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   UserRound,
 } from 'lucide-react'
+import ConfirmDialog from '../components/ui/ConfirmDialog.jsx'
 import { useToast } from '../components/ui/toast-context.js'
 import {
   getCurrentUser,
@@ -67,7 +68,7 @@ function Field({ id, label, icon: Icon, error, hint, ...props }) {
   )
 }
 
-export default function AccountPage() {
+export default function AccountPage({ onProfileUpdate }) {
   const { showToast } = useToast()
   const [profile, setProfile] = useState(() => getStoredUser())
   const [form, setForm] = useState(() => {
@@ -84,6 +85,9 @@ export default function AccountPage() {
   const [errors, setErrors] = useState({})
   const [notice, setNotice] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [confirmSaveOpen, setConfirmSaveOpen] = useState(false)
+
+  const closeConfirmSave = useCallback(() => setConfirmSaveOpen(false), [])
 
   const applyProfile = useCallback((user) => {
     setProfile(user)
@@ -131,7 +135,7 @@ export default function AccountPage() {
     setErrors((current) => ({ ...current, [key]: undefined }))
   }
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = (event) => {
     event.preventDefault()
     if (saving) return
 
@@ -157,17 +161,24 @@ export default function AccountPage() {
     setErrors(nextErrors)
     setNotice(null)
 
-    if (Object.keys(nextErrors).length > 0) return
+    if (Object.keys(nextErrors).length === 0) {
+      setConfirmSaveOpen(true)
+    }
+  }
+
+  const saveProfile = async () => {
+    if (saving) return
 
     setSaving(true)
     try {
       const updated = await updateProfile({
         currentPassword: form.currentPassword,
-        username,
-        fullName,
+        username: form.username.trim(),
+        fullName: form.fullName.trim(),
         newPassword: form.newPassword || undefined,
       })
       applyProfile(updated)
+      onProfileUpdate?.(updated)
       setForm((current) => ({ ...current, newPassword: '', currentPassword: '' }))
       showToast('success', 'Data akun berhasil diperbarui')
     } catch (error) {
@@ -178,6 +189,7 @@ export default function AccountPage() {
       })
     } finally {
       setSaving(false)
+      setConfirmSaveOpen(false)
     }
   }
 
@@ -329,6 +341,18 @@ export default function AccountPage() {
           </div>
         </form>
       </section>
+
+      <ConfirmDialog
+        open={confirmSaveOpen}
+        icon={Save}
+        title="Simpan perubahan profil?"
+        description={`Username akan diubah menjadi @${form.username.trim()}.${form.newPassword ? ' Password juga akan diperbarui.' : ''}`}
+        confirmLabel="Ya, simpan"
+        busyLabel="Menyimpan..."
+        loading={saving}
+        onConfirm={saveProfile}
+        onCancel={closeConfirmSave}
+      />
     </div>
   )
 }

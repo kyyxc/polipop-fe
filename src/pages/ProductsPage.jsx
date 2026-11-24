@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
-  ChevronDown,
   FileSpreadsheet,
   FileText,
   LoaderCircle,
@@ -12,13 +11,16 @@ import Pagination from '../components/categories/Pagination.jsx'
 import DeleteProductDialog from '../components/products/DeleteProductDialog.jsx'
 import ProductFormModal from '../components/products/ProductFormModal.jsx'
 import ProductTable from '../components/products/ProductTable.jsx'
-import StockAdjustmentModal from '../components/products/StockAdjustmentModal.jsx'
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+} from '../components/ui/DropdownMenu.jsx'
+import Select from '../components/ui/Select.jsx'
 import { useToast } from '../components/ui/toast-context.js'
 import { useCart } from '../context/cart-context.js'
 import { buildHash, readQueryParams } from '../lib/hashQuery.js'
 import { downloadProductsExcel, downloadProductsPdf } from '../lib/productExport.js'
 import {
-  adjustStock,
   createProduct,
   deactivateProduct,
   getActiveCategories,
@@ -73,11 +75,9 @@ export default function ProductsPage({ onNavigate }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
-  const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exporting, setExporting] = useState(null)
   const [exportError, setExportError] = useState('')
   const [formState, setFormState] = useState(null)
-  const [stockProduct, setStockProduct] = useState(null)
   const [deleteProduct, setDeleteProduct] = useState(null)
 
   const filtersRef = useRef(filters)
@@ -194,23 +194,6 @@ export default function ProductsPage({ onNavigate }) {
     }
   }
 
-  const handleStockSubmit = async (payload) => {
-    try {
-      await adjustStock(stockProduct.id, payload)
-      showToast(
-        'success',
-        payload.type === 'masuk'
-          ? 'Stok berhasil ditambahkan'
-          : 'Stok berhasil dikurangi',
-      )
-      setStockProduct(null)
-      refreshData()
-    } catch (err) {
-      showToast('error', err.message || 'Gagal mengubah stok produk.')
-      throw err
-    }
-  }
-
   const handleDeleteSubmit = async (product) => {
     try {
       await deactivateProduct(product.id)
@@ -224,7 +207,6 @@ export default function ProductsPage({ onNavigate }) {
   }
 
   const handleExport = async (format) => {
-    setExportMenuOpen(false)
     setExportError('')
     setExporting(format)
     try {
@@ -247,9 +229,6 @@ export default function ProductsPage({ onNavigate }) {
 
   const primaryExportClass =
     'inline-flex h-10 items-center gap-2 rounded-xl border border-pink-mist bg-surface px-3.5 text-xs font-semibold text-ink-muted transition hover:border-pink-primary hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary disabled:cursor-not-allowed disabled:opacity-50'
-  const menuExportClass =
-    'flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-ink-muted transition hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-pink-primary disabled:cursor-not-allowed disabled:opacity-50'
-
   const sortLabel = useMemo(
     () =>
       `${filters.orderBy === 'name' ? 'nama' : filters.orderBy === 'price' ? 'harga' : 'stok'} ${
@@ -290,49 +269,28 @@ export default function ProductsPage({ onNavigate }) {
             </ExportButton>
           </div>
 
-          <div className="relative sm:hidden">
-            <button
-              type="button"
-              onClick={() => setExportMenuOpen((open) => !open)}
-              aria-expanded={exportMenuOpen}
-              aria-haspopup="menu"
-              disabled={Boolean(exporting)}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-pink-mist bg-surface px-4 text-xs font-semibold text-ink-muted transition hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary disabled:opacity-50"
+          <DropdownMenu
+            label="Export"
+            icon={FileText}
+            loading={Boolean(exporting)}
+            className="w-full sm:hidden"
+            menuClassName="w-full"
+          >
+            <DropdownMenuItem
+              icon={exporting === 'pdf' ? LoaderCircle : FileText}
+              iconClassName={exporting === 'pdf' ? 'animate-spin' : ''}
+              onSelect={() => handleExport('pdf')}
             >
-              {exporting ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <FileText className="size-4" />
-              )}
-              Export
-              <ChevronDown className="size-4" />
-            </button>
-            {exportMenuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 z-20 mt-2 w-full overflow-hidden rounded-xl border border-pink-mist bg-surface py-1 shadow-xl"
-              >
-                <ExportButton
-                  format="pdf"
-                  activeFormat={exporting}
-                  onClick={handleExport}
-                  className={menuExportClass}
-                  role="menuitem"
-                >
-                  Export PDF
-                </ExportButton>
-                <ExportButton
-                  format="xlsx"
-                  activeFormat={exporting}
-                  onClick={handleExport}
-                  className={menuExportClass}
-                  role="menuitem"
-                >
-                  Export Excel
-                </ExportButton>
-              </div>
-            )}
-          </div>
+              Export PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              icon={exporting === 'xlsx' ? LoaderCircle : FileSpreadsheet}
+              iconClassName={exporting === 'xlsx' ? 'animate-spin' : ''}
+              onSelect={() => handleExport('xlsx')}
+            >
+              Export Excel
+            </DropdownMenuItem>
+          </DropdownMenu>
 
           <button
             type="button"
@@ -395,43 +353,44 @@ export default function ProductsPage({ onNavigate }) {
             <label htmlFor="product-order-by" className="block text-xs font-semibold text-ink">
               Urutkan berdasarkan
             </label>
-            <select
+            <Select
               id="product-order-by"
+              className="mt-1.5 w-full"
               value={filters.orderBy}
               onChange={(event) =>
                 setFilters((current) => ({ ...current, orderBy: event.target.value, page: 1 }))
               }
-              className="mt-1.5 h-11 w-full rounded-xl border border-pink-mist bg-surface px-3 text-sm text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
             >
               <option value="name">Nama</option>
               <option value="price">Harga</option>
-              <option value="stock">Stock</option>
-            </select>
+              <option value="stock">Stok</option>
+            </Select>
           </div>
 
           <div>
             <label htmlFor="product-sort" className="block text-xs font-semibold text-ink">
               Arah pengurutan
             </label>
-            <select
+            <Select
               id="product-sort"
+              className="mt-1.5 w-full"
               value={filters.sort}
               onChange={(event) =>
                 setFilters((current) => ({ ...current, sort: event.target.value, page: 1 }))
               }
-              className="mt-1.5 h-11 w-full rounded-xl border border-pink-mist bg-surface px-3 text-sm text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
             >
               <option value="asc">Ascending (A–Z / terendah)</option>
               <option value="desc">Descending (Z–A / tertinggi)</option>
-            </select>
+            </Select>
           </div>
 
           <div>
             <label htmlFor="product-per-page" className="block text-xs font-semibold text-ink">
               Per halaman
             </label>
-            <select
+            <Select
               id="product-per-page"
+              className="mt-1.5 w-full"
               value={filters.perPage}
               onChange={(event) =>
                 setFilters((current) => ({
@@ -440,14 +399,13 @@ export default function ProductsPage({ onNavigate }) {
                   page: 1,
                 }))
               }
-              className="mt-1.5 h-11 w-full rounded-xl border border-pink-mist bg-surface px-3 text-sm text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
             >
               {PER_PAGE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
       </section>
@@ -476,7 +434,6 @@ export default function ProductsPage({ onNavigate }) {
             onNavigate(`${PAGE_PATH}/${encodeURIComponent(id)}`)
           }
           onEdit={(product) => setFormState({ mode: 'edit', product })}
-          onStock={setStockProduct}
           onDelete={setDeleteProduct}
         />
       </section>
@@ -498,15 +455,6 @@ export default function ProductsPage({ onNavigate }) {
           categories={categories}
           onSubmit={handleFormSubmit}
           onClose={() => setFormState(null)}
-        />
-      )}
-
-      {stockProduct && (
-        <StockAdjustmentModal
-          open
-          product={stockProduct}
-          onSubmit={handleStockSubmit}
-          onClose={() => setStockProduct(null)}
         />
       )}
 

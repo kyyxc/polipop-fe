@@ -123,9 +123,9 @@ export function CartProvider({ children }) {
     setCartError('')
   }, [])
 
-  const decrementStock = useCallback((paidItems) => {
+  const decrementStock = useCallback((paidItems, transaction = null) => {
     // Stok dan riwayat mutasi ditulis sekaligus oleh productService.
-    setProducts(recordSaleStock(paidItems))
+    setProducts(recordSaleStock(paidItems, transaction))
   }, [])
 
   const value = useMemo(

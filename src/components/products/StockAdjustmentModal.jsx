@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AlertCircle, LoaderCircle, X } from 'lucide-react'
+import Select from '../ui/Select.jsx'
 import Modal from './Modal.jsx'
 
 const inputClass = (hasError) =>
@@ -132,24 +133,24 @@ export default function StockAdjustmentModal({
             <label htmlFor="stock-type" className="block text-xs font-semibold text-ink">
               Mutation Type <span className="text-error">*</span>
             </label>
-            <select
+            <Select
               id="stock-type"
+              className="mt-1.5 w-full"
               value={type}
               onChange={(event) => {
                 setType(event.target.value)
                 setErrors((current) => ({ ...current, type: '', quantity: '' }))
               }}
               disabled={submitting}
-              aria-invalid={Boolean(errors.type)}
+              invalid={Boolean(errors.type)}
               aria-describedby={errors.type ? 'stock-type-error' : undefined}
-              className={inputClass(Boolean(errors.type))}
             >
               <option value="masuk">Tambah Stok (masuk)</option>
               <option value="keluar">Kurangi Stok (keluar)</option>
               {allowAdjustment && (
                 <option value="penyesuaian">Penyesuaian (stok akhir)</option>
               )}
-            </select>
+            </Select>
             <FieldError id="stock-type-error" message={errors.type} />
           </div>
 

@@ -191,18 +191,20 @@ export default function ProductTable({
                       <Pencil className="size-3.5" />
                       Edit
                     </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onStock(product)
-                      }}
-                      aria-label={`Atur stok produk ${product.name}`}
-                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-pink-mist bg-surface px-2 text-[11px] font-semibold text-ink-muted transition hover:border-pink-primary hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
-                    >
-                      <PackagePlus className="size-3.5" />
-                      Atur Stok
-                    </button>
+                    {typeof onStock === 'function' && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onStock(product)
+                        }}
+                        aria-label={`Atur stok produk ${product.name}`}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-pink-mist bg-surface px-2 text-[11px] font-semibold text-ink-muted transition hover:border-pink-primary hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
+                      >
+                        <PackagePlus className="size-3.5" />
+                        Atur Stok
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(event) => {

@@ -12,6 +12,7 @@ import {
   Store,
   UserRound,
 } from 'lucide-react'
+import { ADMIN_WHATSAPP_URL } from '../config/contact.js'
 import { login } from '../lib/authService.js'
 
 const accessSteps = [
@@ -259,7 +260,7 @@ export default function LoginPage({ onSuccess }) {
               </span>
             </div>
 
-            <div className="rounded-2xl border border-pink-mist bg-white p-4">
+            <div className="rounded-2xl border border-pink-mist bg-white p-4 dark:bg-surface">
               <div className="flex items-center gap-3">
                 <div className="flex size-11 items-center justify-center rounded-full bg-pink-light text-pink-dark">
                   <UserRound className="size-5" />
@@ -380,18 +381,14 @@ export default function LoginPage({ onSuccess }) {
                 checked={remember}
                 onChange={(event) => setRemember(event.target.checked)}
               />
-              <button
-                type="button"
-                onClick={() =>
-                  setStatus({
-                    type: 'info',
-                    message: 'Hubungi administrator outlet untuk mereset password Anda.',
-                  })
-                }
+              <a
+                href={ADMIN_WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="rounded text-xs font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
               >
                 Lupa password?
-              </button>
+              </a>
             </div>
 
             <button
@@ -415,18 +412,14 @@ export default function LoginPage({ onSuccess }) {
 
           <p className="mt-6 text-center text-xs text-ink-muted">
             Belum punya akun kasir?{' '}
-            <button
-              type="button"
-              onClick={() =>
-                setStatus({
-                  type: 'info',
-                  message: 'Silakan minta akun kasir ke administrator outlet.',
-                })
-              }
+            <a
+              href={ADMIN_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="rounded font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
             >
               Hubungi admin outlet
-            </button>
+            </a>
           </p>
         </section>
       </div>

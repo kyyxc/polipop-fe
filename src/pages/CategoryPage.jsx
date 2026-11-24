@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import CategoryFormModal from '../components/categories/CategoryFormModal.jsx'
 import CategoryTable from '../components/categories/CategoryTable.jsx'
@@ -8,6 +8,7 @@ import { useToast } from '../components/ui/toast-context.js'
 import {
   createCategory,
   deleteCategory,
+  FORM_ERROR_CODES,
   getCategories,
   updateCategory,
 } from '../lib/categoryService.js'
@@ -22,55 +23,51 @@ export default function CategoryPage() {
   const [formModal, setFormModal] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [page, setPage] = useState(1)
+  const [meta, setMeta] = useState({ total: 0, totalPages: 1, perPage: PAGE_SIZE })
 
-  const loadCategories = useCallback(async ({ silent = false } = {}) => {
+  const loadCategories = useCallback(async ({ silent = false, targetPage = 1 } = {}) => {
     if (!silent) {
       setLoading(true)
       setError(null)
     }
+
     try {
-      setCategories(await getCategories())
+      const result = await getCategories({ page: targetPage, perPage: PAGE_SIZE })
+      setCategories(result.items)
+      setMeta({
+        total: result.total,
+        totalPages: result.totalPages,
+        perPage: result.perPage,
+      })
+      if (result.page !== targetPage) setPage(result.page)
+      return result
     } catch (err) {
-      setError(err.message || 'Gagal memuat daftar kategori.')
+      if (!silent) setError(err.message || 'Gagal memuat daftar kategori.')
+      return null
     } finally {
       if (!silent) setLoading(false)
     }
   }, [])
 
+  const totalPages = Math.max(1, meta.totalPages || 1)
+  const currentPage = Math.min(Math.max(1, page), totalPages)
+  const pageSize = meta.perPage || PAGE_SIZE
+
   useEffect(() => {
     let active = true
     const timer = setTimeout(() => {
-      if (active) loadCategories()
+      if (active) loadCategories({ targetPage: currentPage })
     }, 0)
     return () => {
       active = false
       clearTimeout(timer)
     }
-  }, [loadCategories])
-
-  const totalPages = Math.max(1, Math.ceil(categories.length / PAGE_SIZE))
-  const currentPage = Math.min(page, totalPages)
-
-  const pageCategories = useMemo(
-    () =>
-      categories.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [categories, currentPage],
-  )
-
-  const existingNames = useMemo(
-    () => categories.map((category) => category.name.toLocaleLowerCase('id-ID')),
-    [categories],
-  )
-
-  const formNames = useMemo(() => {
-    if (formModal?.mode !== 'edit') return existingNames
-    return categories
-      .filter((category) => category.id !== formModal.category.id)
-      .map((category) => category.name.toLocaleLowerCase('id-ID'))
-  }, [categories, existingNames, formModal])
+  }, [currentPage, loadCategories])
 
   const handleFormSubmit = async (name) => {
     const isEdit = formModal?.mode === 'edit'
+    const targetPage = isEdit ? currentPage : 1
+
     try {
       if (isEdit) {
         await updateCategory(formModal.category.id, name)
@@ -84,16 +81,14 @@ export default function CategoryPage() {
           : 'Kategori berhasil ditambahkan',
       )
       setFormModal(null)
-      if (!isEdit) setPage(1)
-      await loadCategories({ silent: true })
-    } catch (err) {
-      if (
-        err.code === 'VALIDATION' ||
-        err.code === 'DUPLICATE' ||
-        err.code === 'NOT_FOUND'
-      ) {
-        throw err
+
+      if (!isEdit && currentPage !== 1) {
+        setPage(1)
+      } else {
+        await loadCategories({ silent: true, targetPage })
       }
+    } catch (err) {
+      if (FORM_ERROR_CODES.has(err.code)) throw err
       showToast(
         'error',
         isEdit ? 'Gagal memperbarui kategori' : 'Gagal menambahkan kategori',
@@ -107,10 +102,11 @@ export default function CategoryPage() {
       await deleteCategory(deleting.id)
       showToast('success', 'Kategori berhasil dihapus')
       setDeleting(null)
-      await loadCategories({ silent: true })
+      await loadCategories({ silent: true, targetPage: currentPage })
       return { ok: true }
     } catch (err) {
-      showToast('error', 'Gagal menghapus kategori')
+      const message = err.message || 'Gagal menghapus kategori.'
+      showToast('error', message)
       return { ok: false, error: err }
     }
   }
@@ -141,12 +137,12 @@ export default function CategoryPage() {
         className="mt-6 overflow-hidden rounded-2xl border border-pink-mist bg-surface shadow-[0_20px_50px_-38px_rgba(194,96,122,0.55)]"
       >
         <CategoryTable
-          categories={pageCategories}
+          categories={categories}
           loading={loading}
           error={error}
           page={currentPage}
-          pageSize={PAGE_SIZE}
-          onRetry={() => loadCategories()}
+          pageSize={pageSize}
+          onRetry={() => loadCategories({ targetPage: currentPage })}
           onAdd={() => setFormModal({ mode: 'create' })}
           onEdit={(category) => setFormModal({ mode: 'edit', category })}
           onDelete={(category) => setDeleting(category)}
@@ -156,8 +152,8 @@ export default function CategoryPage() {
       <Pagination
         page={currentPage}
         totalPages={totalPages}
-        total={categories.length}
-        pageSize={PAGE_SIZE}
+        total={meta.total}
+        pageSize={pageSize}
         onChange={setPage}
       />
 
@@ -167,7 +163,6 @@ export default function CategoryPage() {
           open
           mode={formModal.mode}
           initialName={formModal.category?.name ?? ''}
-          existingNames={formNames}
           onSubmit={handleFormSubmit}
           onClose={() => setFormModal(null)}
         />

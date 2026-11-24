@@ -14,12 +14,18 @@ import {
 
 function NavItem({ item, active, compact, onNavigate }) {
   const Icon = item.icon
+  const Tag = item.href ? 'a' : 'button'
+  const linkProps = item.href
+    ? { href: item.href, target: '_blank', rel: 'noopener noreferrer' }
+    : {
+        type: 'button',
+        onClick: () => onNavigate(item.route),
+        'aria-current': active ? 'page' : undefined,
+      }
 
   return (
-    <button
-      type="button"
-      onClick={() => onNavigate(item.route)}
-      aria-current={active ? 'page' : undefined}
+    <Tag
+      {...linkProps}
       title={compact ? item.label : undefined}
       className={[
         'group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
@@ -57,8 +63,16 @@ function NavItem({ item, active, compact, onNavigate }) {
           {item.badge}
         </span>
       )}
-    </button>
+    </Tag>
   )
+}
+
+function getUserInitials(user) {
+  const name = user?.full_name?.trim() || user?.username?.trim() || 'Kasir'
+  const parts = name.split(/\s+/).filter(Boolean)
+
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
 export default function Sidebar({
@@ -70,7 +84,11 @@ export default function Sidebar({
   onNavigate,
   onLogout,
   loggingOut = false,
+  user,
 }) {
+  const displayName = user?.full_name?.trim() || user?.username?.trim() || 'Kasir'
+  const username = user?.username?.trim()
+
   return (
     <>
       {mobileOpen && (
@@ -163,17 +181,22 @@ export default function Sidebar({
               collapsed ? 'lg:justify-center lg:bg-transparent' : '',
             ].join(' ')}
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-pink-dark text-xs font-bold text-white">
-              K3
+            <span
+              title={displayName}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-pink-dark text-xs font-bold text-white"
+            >
+              {getUserInitials(user)}
             </span>
             <div
               className={['min-w-0 flex-1', collapsed ? 'lg:hidden' : ''].join(
                 ' ',
               )}
             >
-              <p className="truncate text-xs font-semibold text-ink">Kasir 03</p>
+              <p className="truncate text-xs font-semibold text-ink">
+                {displayName}
+              </p>
               <p className="truncate text-[10px] text-ink-muted">
-                Outlet Sudirman
+                {username ? `@${username}` : 'Akun kasir'}
               </p>
             </div>
           </div>

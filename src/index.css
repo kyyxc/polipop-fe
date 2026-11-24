@@ -3,7 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
     --font-heading: var(--font-sans);
@@ -108,6 +108,20 @@
 }
 
 .dark {
+    /* Palet gelap untuk token khusus aplikasi */
+    --pink-primary: #d98ba3;
+    --pink-dark: #c2607a;
+    --pink-light: #3a2a31;
+    --bg: #141013;
+    --surface: #1f181c;
+    --border: #3a2a31;
+    --text: #f8f2f4;
+    --text-muted: #bfa9b1;
+    --success: #4ade80;
+    --error: #f87171;
+    --warning: #fbbf24;
+
+    /* Token shadcn mode gelap */
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);
@@ -150,6 +164,16 @@
     }
   html {
     @apply font-sans;
+    }
+  select {
+    color-scheme: light;
+    }
+  .dark select {
+    color-scheme: dark;
+    }
+  select option {
+    background-color: var(--surface);
+    color: var(--text);
     }
 }
 

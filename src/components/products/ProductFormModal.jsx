@@ -4,6 +4,7 @@ import {
   readFileAsDataUrl,
   validateImageFile,
 } from '../../lib/productService.js'
+import Select from '../ui/Select.jsx'
 import Modal from './Modal.jsx'
 
 const inputClass = (hasError) =>
@@ -42,34 +43,36 @@ function TextField({ id, label, error, required, className, ...props }) {
   )
 }
 
+function isValidAmount(value) {
+  if (String(value ?? '').trim() === '') return false
+  if (!/^\d+(\.\d{1,2})?$/.test(String(value).trim())) return false
+  return Number(value) >= 0
+}
+
 function validateForm(form, imagePreview, isEdit) {
   const errors = {}
   const barcode = form.barcode.trim()
   const name = form.name.trim()
   const unit = form.unit.trim()
-  const price = Number(form.price)
-  const stock = Number(form.initial_stock)
 
   if (!barcode) errors.barcode = 'Barcode wajib diisi'
-  else if (!/^[A-Za-z0-9-]{4,32}$/.test(barcode)) {
-    errors.barcode = 'Format barcode tidak valid'
-  }
+  else if (barcode.length > 50) errors.barcode = 'Barcode maksimal 50 karakter'
 
   if (!name) errors.name = 'Nama produk wajib diisi'
-  else if (name.length > 100) errors.name = 'Nama produk maksimal 100 karakter'
+  else if (name.length > 150) errors.name = 'Nama produk maksimal 150 karakter'
 
   if (!form.categoryId) errors.categoryId = 'Kategori wajib dipilih'
 
-  if (form.price === '' || !Number.isInteger(price) || price < 0) {
+  if (!isValidAmount(form.price)) {
     errors.price = 'Harga jual tidak valid'
   }
 
-  if (!isEdit && (form.initial_stock === '' || !Number.isInteger(stock) || stock < 0)) {
+  if (!isEdit && !isValidAmount(form.initial_stock)) {
     errors.initial_stock = 'Stok awal tidak valid'
   }
 
   if (!unit) errors.unit = 'Satuan wajib diisi'
-  else if (unit.length > 20) errors.unit = 'Satuan maksimal 20 karakter'
+  else if (unit.length > 30) errors.unit = 'Satuan maksimal 30 karakter'
 
   if (!isEdit && !imagePreview) errors.image = 'Gambar produk wajib diunggah'
 
@@ -94,6 +97,7 @@ export default function ProductFormModal({
     unit: product?.unit ?? '',
   }))
   const [imagePreview, setImagePreview] = useState(product?.image ?? '')
+  const [imageFile, setImageFile] = useState(null)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -116,6 +120,7 @@ export default function ProductFormModal({
     try {
       const dataUrl = await readFileAsDataUrl(file)
       setImagePreview(dataUrl)
+      setImageFile(file)
       setErrors((current) => ({ ...current, image: '' }))
     } catch {
       setErrors((current) => ({ ...current, image: 'Gagal membaca gambar.' }))
@@ -142,7 +147,7 @@ export default function ProductFormModal({
         price: Number(form.price),
         initial_stock: Number(form.initial_stock),
         unit: form.unit.trim(),
-        image: imagePreview,
+        imageFile,
       })
     } catch (err) {
       if (err?.fields) setErrors(err.fields)
@@ -168,8 +173,8 @@ export default function ProductFormModal({
             </h2>
             <p id="product-form-description" className="mt-0.5 text-xs text-ink-muted">
               {isEdit
-                ? 'Perbarui informasi produk. Perubahan stok dilakukan lewat Atur Stok.'
-                : 'Lengkapi data produk baru. Gambar produk wajib diunggah.'}
+                ? 'Perbarui informasi produk. Stok tidak dapat diubah dari form ini.'
+                : 'Produk dibuat terlebih dahulu, lalu gambar diunggah otomatis.'}
             </p>
           </div>
           <button
@@ -191,6 +196,7 @@ export default function ProductFormModal({
             onChange={(event) => updateField('barcode', event.target.value)}
             error={errors.barcode}
             placeholder="Contoh: 899100000011"
+            maxLength={50}
             disabled={submitting}
             data-autofocus
           />
@@ -202,7 +208,7 @@ export default function ProductFormModal({
             onChange={(event) => updateField('name', event.target.value)}
             error={errors.name}
             placeholder="Contoh: Kopi Susu"
-            maxLength={100}
+            maxLength={150}
             disabled={submitting}
           />
 
@@ -210,14 +216,14 @@ export default function ProductFormModal({
             <label htmlFor="product-category" className="block text-xs font-semibold text-ink">
               Category <span className="text-error">*</span>
             </label>
-            <select
+            <Select
               id="product-category"
+              className="mt-1.5 w-full"
               value={form.categoryId}
               onChange={(event) => updateField('categoryId', event.target.value)}
-              aria-invalid={Boolean(errors.categoryId)}
+              invalid={Boolean(errors.categoryId)}
               aria-describedby={errors.categoryId ? 'product-category-error' : undefined}
               disabled={submitting}
-              className={inputClass(Boolean(errors.categoryId))}
             >
               <option value="">Pilih kategori</option>
               {categories.map((category) => (
@@ -225,7 +231,7 @@ export default function ProductFormModal({
                   {category.name}
                 </option>
               ))}
-            </select>
+            </Select>
             <FieldError id="product-category-error" message={errors.categoryId} />
           </div>
 
@@ -237,7 +243,7 @@ export default function ProductFormModal({
             onChange={(event) => updateField('unit', event.target.value)}
             error={errors.unit}
             placeholder="Contoh: pcs"
-            maxLength={20}
+            maxLength={30}
             disabled={submitting}
           />
 
@@ -247,8 +253,8 @@ export default function ProductFormModal({
             required
             type="number"
             min="0"
-            step="1"
-            inputMode="numeric"
+            step="0.01"
+            inputMode="decimal"
             value={form.price}
             onChange={(event) => updateField('price', event.target.value)}
             error={errors.price}
@@ -263,8 +269,8 @@ export default function ProductFormModal({
               required
               type="number"
               min="0"
-              step="1"
-              inputMode="numeric"
+              step="0.01"
+              inputMode="decimal"
               value={form.initial_stock}
               onChange={(event) => updateField('initial_stock', event.target.value)}
               error={errors.initial_stock}
@@ -307,7 +313,7 @@ export default function ProductFormModal({
                   />
                 </label>
                 <p className="mt-1.5 text-[11px] text-ink-muted">
-                  JPG, JPEG, PNG, atau WebP. Maksimal 1 MB.
+                  JPG, JPEG, PNG, atau WebP. Maksimal 2 MB.
                 </p>
                 <FieldError id="product-image-error" message={errors.image} />
               </div>

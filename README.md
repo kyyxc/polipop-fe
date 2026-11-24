@@ -144,18 +144,7 @@ Palet warna utama (**Pink Sakura**):
 
 Detail lengkap dan aturan penggunaan: [`design/color-palete.md`](design/color-palete.md).
 
-## 📖 Dokumentasi Halaman
-
-Spesifikasi tiap halaman (layout, interaksi, validasi, acceptance criteria) tersedia sebagai file Markdown di samping kodenya, contoh: [`src/pages/kasir.md`](src/pages/kasir.md).
-
-## 🚢 Build & Deploy
-
-```bash
-npm run build
-```
-
-Hasil build berada di `dist/` dan dapat di-deploy ke hosting statis apa pun (Netlify, Vercel, GitHub Pages, Nginx, dll.). Karena menggunakan hash routing, tidak diperlukan konfigurasi rewrite khusus di server.
-
+## 📖 Dokumentasi Halamanopen 
 Pastikan `VITE_API_URL` di-set saat build agar menunjuk ke backend produksi.
 
 ## 📝 Catatan

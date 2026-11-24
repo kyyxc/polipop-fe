@@ -7,6 +7,7 @@ import {
   Trash2,
   Wallet,
 } from 'lucide-react'
+import Select from '../ui/Select.jsx'
 import { formatRupiah } from '../../lib/format.js'
 
 export default function CartPanel({
@@ -146,11 +147,12 @@ export default function CartPanel({
           <label htmlFor="discount" className="block text-xs font-semibold text-ink">
             Diskon (opsional)
           </label>
-          <select
+          <Select
             id="discount"
+            size="sm"
+            className="w-full"
             value={discountId}
             onChange={(event) => onDiscountChange(event.target.value)}
-            className="h-10 w-full rounded-xl border border-pink-mist bg-surface px-3 text-xs text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
           >
             <option value="">Tanpa diskon</option>
             {discounts.map((discount) => (
@@ -158,7 +160,7 @@ export default function CartPanel({
                 {discount.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <dl className="space-y-1.5 text-sm">

@@ -10,6 +10,7 @@ export default function AppShell({
   onNavigate,
   onLogout,
   loggingOut = false,
+  user,
   children,
 }) {
   const [collapsed, setCollapsed] = useState(() => {
@@ -55,6 +56,7 @@ export default function AppShell({
         onNavigate={handleNavigate}
         onLogout={onLogout}
         loggingOut={loggingOut}
+        user={user}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

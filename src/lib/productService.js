@@ -4,26 +4,169 @@ import {
   mockProducts,
   productImagePlaceholder,
 } from '../data/mockKasir.js'
+import { getCategoryOptions } from './categoryService.js'
 
-// Implementasi lokal untuk simulasi endpoint /products. Seluruh perubahan
-// disimpan di localStorage agar tetap konsisten dengan halaman Kasir/QR.
+// Halaman Produk memakai API. Data lokal/localStorage tetap dipertahankan untuk
+// Kasir, QR, dan riwayat stok yang belum tersedia endpoint API-nya.
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+
 const PRODUCTS_KEY = 'polipop-products'
 const CATEGORIES_KEY = 'polipop-categories'
 const PRODUCTS_EVENT = 'polipop-products-changed'
 const PER_PAGE_OPTIONS = [10, 25, 50]
-const SORT_FIELDS = ['name', 'price', 'stock']
-const MAX_IMAGE_SIZE = 1024 * 1024
+const SORT_FIELDS = ['name', 'price', 'stock', 'created_at']
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const DEFAULT_DATE = '2026-01-01T00:00:00'
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+// Menampilkan nama kategori API pada data produk lokal (Kasir/QR).
+let categoryNameCache = new Map()
+
 export class ProductApiError extends Error {
-  constructor(code, message, fields = {}) {
+  constructor(code, message, fields = {}, status = null) {
     super(message)
     this.name = 'ProductApiError'
     this.code = code
     this.fields = fields
+    this.status = status
+  }
+}
+
+async function readJson(response) {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+function resolveCode(status) {
+  if (status === 401 || status === 403) return 'UNAUTHORIZED'
+  if (status === 404) return 'NOT_FOUND'
+  if (status === 409) return 'DUPLICATE'
+  if (status === 413 || status === 415) return 'IMAGE'
+  if (status === 400 || status === 422) return 'VALIDATION'
+  return 'UNKNOWN'
+}
+
+function localizeMessage(code, rawMessage) {
+  const text = String(rawMessage ?? '').toLocaleLowerCase('id-ID')
+
+  if (text.includes('at most 150 characters')) return 'Maksimal 150 karakter'
+  if (text.includes('at most 50 characters')) return 'Maksimal 50 karakter'
+  if (text.includes('at most 30 characters')) return 'Maksimal 30 karakter'
+  if (text.includes('field required')) return 'Wajib diisi'
+  if (text.includes('valid decimal') || text.includes('decimal_places')) {
+    return 'Nilai tidak valid'
+  }
+  if (code === 'UNAUTHORIZED') return 'Sesi Anda tidak valid. Silakan login kembali.'
+  if (code === 'NOT_FOUND' || text.includes('not found')) return 'Produk tidak ditemukan.'
+  if (text.includes('barcode already')) return 'Barcode sudah digunakan'
+  if (text.includes('category not found')) return 'Kategori tidak ditemukan'
+  if (text.includes('no fields to update')) return 'Tidak ada perubahan untuk disimpan'
+  if (text.includes('at most')) return 'Ukuran gambar maksimal 2 MB'
+  if (text.includes('valid jpeg') || text.includes('file is empty')) {
+    return 'Format gambar tidak didukung'
+  }
+  if (code === 'VALIDATION') return 'Periksa kembali data produk.'
+  return rawMessage || 'Permintaan gagal. Silakan coba lagi.'
+}
+
+function localizeFieldMessage(message) {
+  const text = String(message ?? '').toLocaleLowerCase('id-ID')
+
+  if (text.includes('barcode already')) return 'Barcode sudah digunakan'
+  if (text.includes('category not found')) return 'Kategori tidak ditemukan'
+  if (text.includes('at most 150 characters')) return 'Maksimal 150 karakter'
+  if (text.includes('at most 50 characters')) return 'Maksimal 50 karakter'
+  if (text.includes('at most 30 characters')) return 'Maksimal 30 karakter'
+  if (text.includes('field required')) return 'Wajib diisi'
+  if (
+    text.includes('valid decimal') ||
+    text.includes('decimal_places') ||
+    text.includes('greater than or equal to 0')
+  ) {
+    return 'Nilai tidak valid'
+  }
+  return message
+}
+
+function mapFieldErrors(rawErrors) {
+  const fields = {}
+  const alias = {
+    category_id: 'categoryId',
+    stock: 'initial_stock',
+    file: 'image',
+  }
+
+  rawErrors.forEach((error) => {
+    const message = error?.message
+    if (!message) return
+    const field = alias[error?.field] ?? error?.field
+    if (field) fields[field] = localizeFieldMessage(message)
+  })
+
+  return fields
+}
+
+async function request(path, { method = 'GET', body } = {}) {
+  let response
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: isFormData || body === undefined
+        ? undefined
+        : { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
+    })
+  } catch {
+    throw new ProductApiError(
+      'NETWORK',
+      'Tidak dapat terhubung ke server. Periksa koneksi Anda dan coba lagi.',
+    )
+  }
+
+  const payload = await readJson(response)
+
+  if (!response.ok) {
+    const rawErrors = Array.isArray(payload?.errors) ? payload.errors : []
+    const rawMessage = rawErrors
+      .map((error) => error?.message)
+      .filter(Boolean)
+      .join(' ')
+    const code = resolveCode(response.status)
+
+    throw new ProductApiError(
+      code,
+      localizeMessage(code, rawMessage),
+      mapFieldErrors(rawErrors),
+      response.status,
+    )
+  }
+
+  return payload
+}
+
+function normalizeProductFromApi(raw) {
+  return {
+    id: String(raw?.id ?? ''),
+    categoryId: String(raw?.category?.id ?? ''),
+    categoryName: raw?.category?.name ?? '-',
+    barcode: raw?.barcode ?? '',
+    name: String(raw?.name ?? '').trim(),
+    image: raw?.image ?? productImagePlaceholder,
+    price: Math.max(0, Number(raw?.price) || 0),
+    stock: Math.max(0, Number(raw?.stock) || 0),
+    unit: String(raw?.unit ?? 'pcs'),
+    active: true,
+    history: [],
+    createdAt: raw?.created_at ?? raw?.createdAt ?? '',
+    updatedAt: raw?.updated_at ?? raw?.updatedAt ?? '',
   }
 }
 
@@ -31,26 +174,78 @@ function keyOf(value) {
   return String(value ?? '').toLocaleLowerCase('id-ID')
 }
 
-function generateId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
-  }
-  return `prod-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+// Contoh mutasi agar halaman riwayat stok memiliki data lintas produk saat
+// pertama dibuka. Referensi memakai nomor transaksi dari data contoh.
+const SEEDED_MUTATIONS = {
+  'prod-01': [
+    { type: 'masuk', quantity: 10, createdAt: '2026-11-18T08:10:00', notes: 'Penerimaan supplier' },
+    { type: 'keluar', quantity: 1, createdAt: '2026-11-22T17:40:00', notes: 'Penjualan', reference: 'TRX-20261122-008' },
+    { type: 'keluar', quantity: 2, createdAt: '2026-11-23T14:30:00', notes: 'Penjualan', reference: 'TRX-20261123-006' },
+  ],
+  'prod-03': [
+    { type: 'keluar', quantity: 2, createdAt: '2026-11-21T20:02:00', notes: 'Penjualan', reference: 'TRX-20261121-012' },
+    { type: 'keluar', quantity: 1, createdAt: '2026-11-23T11:45:00', notes: 'Penjualan', reference: 'TRX-20261123-004' },
+  ],
+  'prod-04': [
+    { type: 'masuk', quantity: 6, createdAt: '2026-11-17T09:00:00', notes: 'Penerimaan supplier' },
+    { type: 'keluar', quantity: 1, createdAt: '2026-11-21T16:25:00', notes: 'Penjualan', reference: 'TRX-20261121-011' },
+    { type: 'keluar', quantity: 2, createdAt: '2026-11-22T19:05:00', notes: 'Penjualan', reference: 'TRX-20261122-009' },
+  ],
+  'prod-05': [
+    { type: 'keluar', quantity: 4, createdAt: '2026-11-22T15:18:00', notes: 'Penjualan', reference: 'TRX-20261122-007' },
+    { type: 'keluar', quantity: 2, createdAt: '2026-11-23T11:45:00', notes: 'Penjualan', reference: 'TRX-20261123-004' },
+  ],
+  'prod-07': [
+    { type: 'masuk', quantity: 10, createdAt: '2026-11-19T10:15:00', notes: 'Penerimaan supplier' },
+    { type: 'keluar', quantity: 2, createdAt: '2026-11-21T20:02:00', notes: 'Penjualan', reference: 'TRX-20261121-012' },
+    { type: 'keluar', quantity: 3, createdAt: '2026-11-23T13:12:00', notes: 'Penjualan', reference: 'TRX-20261123-005' },
+  ],
 }
 
 function seedHistory(product, stock) {
+  const examples = SEEDED_MUTATIONS[product.id] ?? []
+  const totalDelta = examples.reduce(
+    (sum, entry) =>
+      sum + (entry.type === 'keluar' ? -entry.quantity : entry.quantity),
+    0,
+  )
+  const initialStock = Math.max(0, stock - totalDelta)
+  let cursor = initialStock
+
+  const mutations = examples.map((entry, index) => {
+    const change = entry.type === 'keluar' ? -entry.quantity : entry.quantity
+    const previousStock = cursor
+    cursor += change
+
+    return {
+      id: `stock-${product.id}-seed-${index + 1}`,
+      type: entry.type,
+      quantity: entry.quantity,
+      quantityChange: change,
+      previousStock,
+      stockAfter: cursor,
+      notes: entry.notes,
+      reference: entry.reference
+        ? { type: 'transaction', id: entry.reference, no: entry.reference }
+        : null,
+      createdAt: entry.createdAt,
+      userId: currentUserId,
+    }
+  })
+
   return [
     {
       id: `stock-${product.id}-initial`,
       type: 'initial_stock',
-      quantity: stock,
-      quantityChange: stock,
+      quantity: initialStock,
+      quantityChange: initialStock,
       previousStock: 0,
-      stockAfter: stock,
+      stockAfter: initialStock,
       notes: 'Stok awal produk',
       createdAt: product.createdAt ?? DEFAULT_DATE,
       userId: currentUserId,
     },
+    ...mutations,
   ]
 }
 
@@ -115,7 +310,10 @@ function readCategories() {
 }
 
 function decorate(products) {
-  const names = new Map(readCategories().map((category) => [category.id, category.name]))
+  const names = new Map([
+    ...readCategories().map((category) => [category.id, category.name]),
+    ...categoryNameCache,
+  ])
 
   return products.map((product) => ({
     ...product,
@@ -123,41 +321,10 @@ function decorate(products) {
   }))
 }
 
-function filterProducts(filters = {}) {
-  const query = keyOf(filters.q).trim()
-  const orderBy = SORT_FIELDS.includes(filters.order_by)
-    ? filters.order_by
-    : 'name'
-  const direction = filters.sort === 'desc' ? -1 : 1
-
-  const rows = readStore().filter(
-    (product) => product.active && product.warungId === currentWarungId,
-  )
-  const decorated = decorate(rows)
-  const matched = query
-    ? decorated.filter(
-        (product) =>
-          keyOf(product.barcode).includes(query) ||
-          keyOf(product.name).includes(query) ||
-          keyOf(product.categoryName).includes(query),
-      )
-    : decorated
-
-  return matched.sort((left, right) => {
-    let result
-    if (orderBy === 'price') result = left.price - right.price
-    else if (orderBy === 'stock') result = left.stock - right.stock
-    else result = left.name.localeCompare(right.name, 'id-ID')
-
-    if (result === 0) result = left.name.localeCompare(right.name, 'id-ID')
-    return result * direction
-  })
-}
-
 function validateImageFile(file) {
   if (!file) return 'Gambar produk wajib diunggah'
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return 'Format gambar tidak didukung'
-  if (file.size > MAX_IMAGE_SIZE) return 'Ukuran gambar maksimal 1 MB'
+  if (file.size > MAX_IMAGE_SIZE) return 'Ukuran gambar maksimal 2 MB'
   return ''
 }
 
@@ -170,158 +337,111 @@ function readFileAsDataUrl(file) {
   })
 }
 
-function validateProductPayload(payload, { categories, products, editing = false }) {
-  const fields = {}
-  const barcode = String(payload.barcode ?? '').trim()
-  const name = String(payload.name ?? '').trim()
-  const categoryId = String(payload.categoryId ?? '').trim()
-  const unit = String(payload.unit ?? '').trim()
-  const price = Number(payload.price)
-  const stock = Number(payload.initial_stock)
-  const ownActiveProducts = products.filter(
-    (product) => product.active && product.warungId === currentWarungId,
-  )
-  const isDuplicate = (field, value) =>
-    ownActiveProducts.some(
-      (product) =>
-        product.id !== (editing ? payload.id : null) &&
-        keyOf(product[field]) === keyOf(value),
-    )
+function buildProductQuery(filters = {}, { page, perPage } = {}) {
+  const params = new URLSearchParams({
+    page: String(page ?? filters.page ?? 1),
+    per_page: String(perPage ?? filters.perPage ?? filters.per_page ?? 10),
+  })
 
-  if (!barcode) {
-    fields.barcode = 'Barcode wajib diisi'
-  } else if (!/^[A-Za-z0-9-]{4,32}$/.test(barcode)) {
-    // Standar barcode masih open decision; pola ini sengaja dibuat permissif
-    // (alphanumerik dan tanda hubung) sampai keputusan final ditetapkan.
-    fields.barcode = 'Format barcode tidak valid'
-  } else if (isDuplicate('barcode', barcode)) {
-    fields.barcode = 'Barcode sudah digunakan'
-  }
+  const sortBy = filters.orderBy ?? filters.sort_by ?? 'name'
+  params.set('sort_by', SORT_FIELDS.includes(sortBy) ? sortBy : 'name')
+  params.set('order', filters.sort === 'desc' ? 'desc' : 'asc')
 
-  if (!name) {
-    fields.name = 'Nama produk wajib diisi'
-  } else if (name.length > 100) {
-    fields.name = 'Nama produk maksimal 100 karakter'
-  } else if (isDuplicate('name', name)) {
-    fields.name = 'Nama produk sudah digunakan'
-  }
-
-  if (!categoryId || !categories.some((category) => category.id === categoryId)) {
-    fields.categoryId = 'Kategori wajib dipilih'
-  }
-
-  if (
-    payload.price === '' ||
-    payload.price === null ||
-    payload.price === undefined ||
-    !Number.isInteger(price) ||
-    price < 0
-  ) {
-    fields.price = 'Harga jual tidak valid'
-  }
-
-  if (!editing) {
-    if (
-      payload.initial_stock === '' ||
-      payload.initial_stock === null ||
-      payload.initial_stock === undefined ||
-      !Number.isInteger(stock) ||
-      stock < 0
-    ) {
-      fields.initial_stock = 'Stok awal tidak valid'
-    }
-  }
-
-  if (!unit) {
-    fields.unit = 'Satuan wajib diisi'
-  } else if (unit.length > 20) {
-    fields.unit = 'Satuan maksimal 20 karakter'
-  }
-
-  if (!editing && !payload.image) {
-    fields.image = 'Gambar produk wajib diunggah'
-  } else if (
-    payload.image &&
-    typeof payload.image === 'string' &&
-    !payload.image.startsWith('data:image/')
-  ) {
-    fields.image = 'Format gambar tidak didukung'
-  }
-
-  return fields
+  if (filters.q) params.set('search', String(filters.q).trim())
+  if (filters.categoryId) params.set('category_id', String(filters.categoryId))
+  return params
 }
 
-function assertNoErrors(fields) {
-  if (Object.keys(fields).length > 0) {
-    throw new ProductApiError('VALIDATION', 'Periksa kembali data produk.', fields)
-  }
-}
-
-// Simulasi GET /products — hanya produk aktif milik warung/user aktif.
+// GET /products?page=&per_page=&search=&category_id=&sort_by=&order=
 export async function getProducts(filters = {}) {
-  await delay(500)
-  const all = filterProducts(filters)
-  const perPage = PER_PAGE_OPTIONS.includes(Number(filters.per_page))
-    ? Number(filters.per_page)
-    : 10
-  const totalPages = Math.max(1, Math.ceil(all.length / perPage))
-  const requestedPage = Number(filters.page)
-  const page =
-    Number.isFinite(requestedPage) && requestedPage > 0
-      ? Math.min(Math.floor(requestedPage), totalPages)
-      : 1
+  const params = buildProductQuery(filters)
+  const payload = await request(`/products?${params.toString()}`)
+  const meta = payload?.meta ?? {}
+  const items = Array.isArray(payload?.data)
+    ? payload.data.map(normalizeProductFromApi)
+    : []
 
   return {
-    items: all.slice((page - 1) * perPage, page * perPage),
-    total: all.length,
-    page,
-    perPage,
-    totalPages,
+    items,
+    total: Number(meta.total ?? items.length) || 0,
+    page: Number(meta.page ?? filters.page ?? 1) || 1,
+    perPage: Number(meta.per_page ?? filters.perPage ?? 10) || 10,
+    totalPages: Math.max(1, Number(meta.total_pages ?? 1) || 1),
   }
 }
 
-// Simulasi GET /api/products/export — tidak terikat pagination.
+// GET /products untuk ekspor: ambil seluruh halaman (maks. 100 per request).
 export async function getExportProducts(filters = {}) {
-  await delay(350)
-  return filterProducts(filters)
+  const first = await getProducts({ ...filters, page: 1, perPage: 100 })
+  const rows = [...first.items]
+  for (let page = 2; page <= first.totalPages; page += 1) {
+    const next = await getProducts({ ...filters, page, perPage: 100 })
+    rows.push(...next.items)
+  }
+  return rows
 }
 
-// Simulasi GET /products/:id.
+// GET /products/:id
 export async function getProductById(id) {
-  await delay(400)
-  const product = decorate(readStore()).find(
-    (entry) =>
-      entry.id === id && entry.active && entry.warungId === currentWarungId,
-  )
-  if (!product) {
+  const payload = await request(`/products/${encodeURIComponent(id)}`)
+  if (!payload?.data) {
     throw new ProductApiError('NOT_FOUND', 'Produk tidak ditemukan.')
   }
-  return product
+  return normalizeProductFromApi(payload.data)
 }
 
-// Simulasi GET /products/:id/mutations dengan filter type/tanggal + pagination.
-export async function getProductMutations(id, filters = {}) {
-  await delay(350)
-  const product = await getProductById(id)
-  const allowedTypes = ['masuk', 'keluar', 'penyesuaian', 'initial_stock']
-  const type = allowedTypes.includes(filters.type) ? filters.type : ''
-  const startDate = filters.start_date ? String(filters.start_date) : ''
-  const endDate = filters.end_date ? String(filters.end_date) : ''
+// Endpoint mutasi belum tersedia; halaman detail menampilkan pesan ini.
+export async function getProductMutations() {
+  throw new ProductApiError(
+    'UNAVAILABLE',
+    'Riwayat mutasi produk belum tersedia.',
+    {},
+    501,
+  )
+}
 
-  const matched = [...product.history]
+// Simulasi GET /stock/history — menggabungkan mutasi seluruh produk warung.
+export async function getStockHistory(filters = {}) {
+  await delay(400)
+
+  const query = keyOf(filters.q).trim()
+  const type = ['masuk', 'keluar', 'penyesuaian', 'initial_stock'].includes(
+    filters.type,
+  )
+    ? filters.type
+    : ''
+  const from = filters.from ? String(filters.from) : ''
+  const to = filters.to ? String(filters.to) : ''
+
+  const rows = readStore()
+    .filter((product) => product.warungId === currentWarungId)
+    .flatMap((product) =>
+      (Array.isArray(product.history) ? product.history : []).map((entry) => ({
+        ...entry,
+        productId: product.id,
+        productName: product.name,
+        productBarcode: product.barcode,
+        productUnit: product.unit,
+      })),
+    )
+    .filter((entry) => !query || keyOf(entry.productName).includes(query) || keyOf(entry.productBarcode).includes(query))
     .filter((entry) => !type || entry.type === type)
     .filter((entry) => {
       const date = String(entry.createdAt).slice(0, 10)
-      if (startDate && date < startDate) return false
-      if (endDate && date > endDate) return false
+      if (from && date < from) return false
+      if (to && date > to) return false
       return true
     })
-    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
+    .sort((left, right) => {
+      const byDate = String(right.createdAt).localeCompare(String(left.createdAt))
+      return byDate || String(right.id).localeCompare(String(left.id))
+    })
 
-  const perPage = PER_PAGE_OPTIONS.includes(Number(filters.per_page))
-    ? Number(filters.per_page)
+  const requestedPerPage = Number(filters.per_page ?? filters.perPage)
+  const perPage = PER_PAGE_OPTIONS.includes(requestedPerPage)
+    ? requestedPerPage
     : 10
-  const totalPages = Math.max(1, Math.ceil(matched.length / perPage))
+  const totalPages = Math.max(1, Math.ceil(rows.length / perPage))
   const requestedPage = Number(filters.page)
   const page =
     Number.isFinite(requestedPage) && requestedPage > 0
@@ -329,201 +449,123 @@ export async function getProductMutations(id, filters = {}) {
       : 1
 
   return {
-    items: matched.slice((page - 1) * perPage, page * perPage),
-    total: matched.length,
+    items: rows.slice((page - 1) * perPage, page * perPage),
+    total: rows.length,
     page,
     perPage,
     totalPages,
   }
 }
 
-// Simulasi GET /api/categories yang dipakai form produk.
+// GET /categories yang dipakai form produk (data kategori berasal dari API).
 export async function getActiveCategories() {
-  await delay(300)
-  return readCategories()
-    .filter((category) => category.userId === currentUserId)
-    .map((category) => ({ id: category.id, name: category.name }))
-    .sort((left, right) => left.name.localeCompare(right.name, 'id-ID'))
+  const categories = await getCategoryOptions()
+  categoryNameCache = new Map(categories.map((category) => [category.id, category.name]))
+  return categories
 }
 
-// Simulasi POST /products (multipart/form-data).
-export async function createProduct(payload) {
-  await delay(600)
-  const products = readStore()
-  const categories = readCategories().filter(
-    (category) => category.userId === currentUserId,
-  )
-  const fields = validateProductPayload(payload, { categories, products })
-  assertNoErrors(fields)
+// PUT /products/:id/image — multipart/form-data dengan field "file".
+export async function uploadProductImage(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
 
-  const stock = Number(payload.initial_stock)
-  const id = generateId()
-  const now = new Date().toISOString()
-  const created = normalizeProduct({
-    id,
-    warungId: currentWarungId,
-    categoryId: String(payload.categoryId).trim(),
-    barcode: String(payload.barcode).trim(),
-    name: String(payload.name).trim(),
-    price: Number(payload.price),
-    stock,
-    unit: String(payload.unit).trim(),
-    image: payload.image,
-    active: true,
-    history: [
-      {
-        id: `stock-${id}-initial`,
-        type: 'initial_stock',
-        quantity: stock,
-        quantityChange: stock,
-        previousStock: 0,
-        stockAfter: stock,
-        notes: 'Stok awal produk',
-        createdAt: now,
-        userId: currentUserId,
-      },
-    ],
-    createdAt: now,
-    updatedAt: now,
+  const payload = await request(`/products/${encodeURIComponent(id)}/image`, {
+    method: 'PUT',
+    body: formData,
   })
-
-  writeStore([...products, created])
-  return decorate([created])[0]
+  return normalizeProductFromApi(payload?.data)
 }
 
-// Simulasi PUT /products/:id. Stok sengaja tidak diubah di sini.
-export async function updateProduct(id, payload) {
-  await delay(600)
-  const products = readStore()
-  const index = products.findIndex(
-    (product) =>
-      product.id === id && product.active && product.warungId === currentWarungId,
-  )
-  if (index === -1) {
-    throw new ProductApiError('NOT_FOUND', 'Produk tidak ditemukan.')
-  }
+// DELETE /products/:id/image
+export async function deleteProductImage(id) {
+  await request(`/products/${encodeURIComponent(id)}/image`, { method: 'DELETE' })
+}
 
-  const categories = readCategories().filter(
-    (category) => category.userId === currentUserId,
-  )
-  const fields = validateProductPayload(
-    { ...payload, id },
-    { categories, products, editing: true },
-  )
-  assertNoErrors(fields)
-
-  const now = new Date().toISOString()
-  const updated = {
-    ...products[index],
-    barcode: String(payload.barcode).trim(),
-    name: String(payload.name).trim(),
-    categoryId: String(payload.categoryId).trim(),
+// POST /products. Gambar diunggah terpisah setelah produk berhasil dibuat.
+export async function createProduct(payload) {
+  const imageFile = payload.imageFile ?? null
+  const body = {
+    category_id: String(payload.categoryId ?? '').trim(),
+    name: String(payload.name ?? '').trim(),
+    barcode: String(payload.barcode ?? '').trim() || null,
     price: Number(payload.price),
-    unit: String(payload.unit).trim(),
-    image: payload.image || products[index].image,
-    updatedAt: now,
+    stock: Number(payload.initial_stock ?? payload.stock ?? 0),
+    unit: String(payload.unit ?? '').trim(),
   }
-  const next = [...products]
-  next[index] = updated
-  writeStore(next)
-  return decorate([updated])[0]
+
+  const apiPayload = await request('/products', { method: 'POST', body })
+  const created = normalizeProductFromApi(apiPayload?.data)
+
+  if (!imageFile) return created
+
+  try {
+    return await uploadProductImage(created.id, imageFile)
+  } catch (error) {
+    // Produk baru gagal mendapat gambar: batalkan agar tidak ada produk yatim.
+    try {
+      await request(`/products/${encodeURIComponent(created.id)}`, { method: 'DELETE' })
+    } catch {
+      // Abaikan kegagalan rollback; error upload tetap diteruskan.
+    }
+    throw error
+  }
 }
 
-// Simulasi POST /products/:id/stock. Perubahan stok + mutasi ditulis sekaligus.
-export async function adjustStock(id, payload) {
-  await delay(600)
-  const products = readStore()
-  const index = products.findIndex(
-    (product) =>
-      product.id === id && product.active && product.warungId === currentWarungId,
+// PATCH /products/:id. Stock sengaja tidak dikirim (backend menolaknya).
+export async function updateProduct(id, payload) {
+  const body = {}
+  if (payload.categoryId) body.category_id = String(payload.categoryId).trim()
+  if (payload.name) body.name = String(payload.name).trim()
+  if (payload.barcode !== undefined) {
+    body.barcode = String(payload.barcode).trim() || null
+  }
+  if (payload.price !== '' && payload.price !== null && payload.price !== undefined) {
+    body.price = Number(payload.price)
+  }
+  if (payload.unit) body.unit = String(payload.unit).trim()
+
+  if (Object.keys(body).length === 0) {
+    throw new ProductApiError('VALIDATION', 'Tidak ada perubahan untuk disimpan.')
+  }
+
+  const apiPayload = await request(`/products/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body,
+  })
+  let updated = normalizeProductFromApi(apiPayload?.data)
+  if (payload.imageFile) {
+    updated = await uploadProductImage(id, payload.imageFile)
+  }
+  return updated
+}
+
+// Endpoint penyesuaian stok belum tersedia di backend.
+export async function adjustStock() {
+  throw new ProductApiError(
+    'UNAVAILABLE',
+    'Penyesuaian stok belum tersedia.',
+    {},
+    501,
   )
-  if (index === -1) {
-    throw new ProductApiError('NOT_FOUND', 'Produk tidak ditemukan.')
-  }
-
-  const fields = {}
-  const type = payload.type
-  const quantity = Number(payload.quantity)
-  const product = products[index]
-
-  if (type !== 'masuk' && type !== 'keluar' && type !== 'penyesuaian') {
-    fields.type = 'Jenis mutasi wajib dipilih'
-  }
-  if (
-    payload.quantity === '' ||
-    payload.quantity === null ||
-    payload.quantity === undefined ||
-    !Number.isInteger(quantity) ||
-    quantity < 1
-  ) {
-    fields.quantity = 'Jumlah stok harus lebih besar dari 0'
-  } else if (type === 'keluar' && quantity > product.stock) {
-    // Pemeriksaan ulang terhadap stok terbaru di "database" lokal.
-    fields.quantity = 'Stok tidak mencukupi'
-  }
-  assertNoErrors(fields)
-
-  const now = new Date().toISOString()
-  let stockAfter
-  let quantityChange
-  if (type === 'masuk') {
-    stockAfter = product.stock + quantity
-    quantityChange = quantity
-  } else if (type === 'keluar') {
-    stockAfter = product.stock - quantity
-    quantityChange = -quantity
-  } else {
-    // `penyesuaian` menerima quantity sebagai jumlah stok akhir yang diinginkan.
-    stockAfter = quantity
-    quantityChange = quantity - product.stock
-  }
-  const mutation = {
-    id: `stock-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    type,
-    quantity,
-    quantityChange,
-    previousStock: product.stock,
-    stockAfter,
-    notes: String(payload.notes ?? '').trim(),
-    createdAt: now,
-    userId: currentUserId,
-  }
-  const updated = {
-    ...product,
-    stock: stockAfter,
-    history: [...product.history, mutation],
-    updatedAt: now,
-  }
-  const next = [...products]
-  next[index] = updated
-  writeStore(next)
-  return decorate([updated])[0]
 }
 
-// Simulasi DELETE /products/:id (soft delete).
+// DELETE /products/:id (soft delete di backend).
 export async function deactivateProduct(id) {
-  await delay(600)
-  const products = readStore()
-  const index = products.findIndex(
-    (product) =>
-      product.id === id && product.active && product.warungId === currentWarungId,
-  )
-  if (index === -1) {
-    throw new ProductApiError('NOT_FOUND', 'Produk tidak ditemukan.')
-  }
-
-  const updated = { ...products[index], active: false, updatedAt: new Date().toISOString() }
-  const next = [...products]
-  next[index] = updated
-  writeStore(next)
-  return decorate([updated])[0]
+  await request(`/products/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 // Dipakai CartContext saat transaksi selesai: stok berkurang dan riwayat
 // mutasi bertipe keluar tetap tercatat.
-export function recordSaleStock(paidItems = []) {
+export function recordSaleStock(paidItems = [], transaction = null) {
   const products = readStore()
   const now = new Date().toISOString()
+  const reference = transaction?.id
+    ? {
+        type: 'transaction',
+        id: transaction.id,
+        no: transaction.no ?? transaction.id,
+      }
+    : null
   let changed = false
 
   const next = products.map((product) => {
@@ -553,6 +595,7 @@ export function recordSaleStock(paidItems = []) {
           previousStock: product.stock,
           stockAfter,
           notes: 'Penjualan',
+          reference,
           createdAt: now,
           userId: currentUserId,
         },
@@ -567,7 +610,7 @@ export function recordSaleStock(paidItems = []) {
 
 // Pembacaan sinkron untuk shared state Kasir/QR.
 export function getAllProducts() {
-  return readStore()
+  return decorate(readStore())
 }
 
 export function subscribeProducts(listener) {
