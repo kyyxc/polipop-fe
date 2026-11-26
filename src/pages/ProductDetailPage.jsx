@@ -5,21 +5,36 @@ import {
   LoaderCircle,
   Package,
   Pencil,
+  Plus,
   Trash2,
 } from 'lucide-react'
 import DeleteProductDialog from '../components/products/DeleteProductDialog.jsx'
 import ProductFormModal from '../components/products/ProductFormModal.jsx'
+import ProductMutationList from '../components/products/ProductMutationList.jsx'
+import StockAdjustmentModal from '../components/products/StockAdjustmentModal.jsx'
 import { useToast } from '../components/ui/toast-context.js'
 import { useCart } from '../context/cart-context.js'
+import { productImagePlaceholder } from '../data/mockKasir.js'
 import { formatDateTime, formatRupiah } from '../lib/format.js'
 import {
+  adjustStock,
   deactivateProduct,
+  deleteProductImage,
   getActiveCategories,
   getProductById,
+  getProductMutations,
   updateProduct,
 } from '../lib/productService.js'
 
 const LIST_ROUTE_KEY = 'polipop-products-route'
+const MUTATIONS_PER_PAGE = 10
+const emptyMutations = {
+  items: [],
+  total: 0,
+  page: 1,
+  perPage: MUTATIONS_PER_PAGE,
+  totalPages: 1,
+}
 
 function previousListRoute() {
   try {
@@ -53,6 +68,10 @@ export default function ProductDetailPage({ productId, onNavigate }) {
   const [reloadKey, setReloadKey] = useState(0)
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [adjustOpen, setAdjustOpen] = useState(false)
+  const [mutations, setMutations] = useState(emptyMutations)
+  const [mutationsLoading, setMutationsLoading] = useState(true)
+  const [mutationsError, setMutationsError] = useState(null)
 
   const backToList = () => onNavigate(previousListRoute())
 
@@ -71,6 +90,32 @@ export default function ProductDetailPage({ productId, onNavigate }) {
         }
       } finally {
         if (active) setLoading(false)
+      }
+    }, 0)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [productId, reloadKey])
+
+  useEffect(() => {
+    let active = true
+    const timer = setTimeout(async () => {
+      setMutationsLoading(true)
+      setMutationsError(null)
+      try {
+        const data = await getProductMutations(productId, {
+          perPage: MUTATIONS_PER_PAGE,
+        })
+        if (active) setMutations(data)
+      } catch (err) {
+        if (active) {
+          setMutations(emptyMutations)
+          setMutationsError(err.message || 'Gagal memuat riwayat mutasi.')
+        }
+      } finally {
+        if (active) setMutationsLoading(false)
       }
     }, 0)
 
@@ -111,6 +156,32 @@ export default function ProductDetailPage({ productId, onNavigate }) {
     }
   }
 
+  const handleDeleteImage = async (id) => {
+    try {
+      await deleteProductImage(id)
+      showToast('success', 'Gambar produk berhasil dihapus')
+      setProduct((current) =>
+        current ? { ...current, image: productImagePlaceholder } : current,
+      )
+      refreshData()
+    } catch (err) {
+      showToast('error', err.message || 'Gagal menghapus gambar produk.')
+      throw err
+    }
+  }
+
+  const handleAdjustSubmit = async (payload) => {
+    try {
+      await adjustStock(productId, payload)
+      showToast('success', 'Stok berhasil diperbarui')
+      setAdjustOpen(false)
+      refreshData()
+    } catch (err) {
+      showToast('error', err.message || 'Gagal memperbarui stok.')
+      throw err
+    }
+  }
+
   const handleDeleteSubmit = async () => {
     try {
       await deactivateProduct(productId)
@@ -144,6 +215,15 @@ export default function ProductDetailPage({ productId, onNavigate }) {
           >
             <Pencil className="size-4" />
             Edit Product
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdjustOpen(true)}
+            disabled={loading || !product}
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-pink-dark px-4 text-xs font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-pink-light disabled:opacity-50 sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Atur Stok
           </button>
           <button
             type="button"
@@ -249,26 +329,43 @@ export default function ProductDetailPage({ productId, onNavigate }) {
               </div>
             </div>
             <p className="text-xs text-ink-muted">
-              Penyesuaian stok belum tersedia sampai endpoint API-nya dibuat.
+              Gunakan tombol Atur Stok untuk menambah, mengurangi, atau
+              menyesuaikan stok.
             </p>
           </section>
 
           <section
             aria-label="Riwayat mutasi stok"
-            className="mt-5 flex items-start gap-3 rounded-2xl border border-pink-mist bg-surface p-5 shadow-[0_20px_50px_-38px_rgba(194,96,122,0.55)] sm:p-6"
+            className="mt-5 rounded-2xl border border-pink-mist bg-surface p-5 shadow-[0_20px_50px_-38px_rgba(194,96,122,0.55)] sm:p-6"
           >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-pink-light text-pink-dark">
-              <AlertCircle className="size-5" />
-            </span>
-            <div>
-              <h2 className="text-sm font-bold text-ink">
-                Product Mutation History
-              </h2>
-              <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                Riwayat mutasi belum tersedia. Endpoint detail produk belum
-                mengembalikan data mutasi dan endpoint mutasi masih dalam
-                pengembangan.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-bold text-ink">
+                  Product Mutation History
+                </h2>
+                <p className="mt-0.5 text-xs text-ink-muted">
+                  {mutations.total} mutasi tercatat untuk produk ini.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  onNavigate(
+                    `/stock/history?q=${encodeURIComponent(product.name)}`,
+                  )
+                }
+                className="inline-flex h-9 items-center rounded-xl border border-pink-mist bg-surface px-3 text-xs font-semibold text-pink-dark transition hover:bg-pink-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
+              >
+                Lihat semua
+              </button>
+            </div>
+            <div className="mt-4">
+              <ProductMutationList
+                items={mutations.items}
+                loading={mutationsLoading}
+                error={mutationsError}
+                onRetry={() => setReloadKey((key) => key + 1)}
+              />
             </div>
           </section>
 
@@ -279,7 +376,18 @@ export default function ProductDetailPage({ productId, onNavigate }) {
               product={product}
               categories={categories}
               onSubmit={handleEditSubmit}
+              onDeleteImage={handleDeleteImage}
               onClose={() => setFormOpen(false)}
+            />
+          )}
+
+          {adjustOpen && (
+            <StockAdjustmentModal
+              open
+              product={product}
+              allowAdjustment
+              onSubmit={handleAdjustSubmit}
+              onClose={() => setAdjustOpen(false)}
             />
           )}
 

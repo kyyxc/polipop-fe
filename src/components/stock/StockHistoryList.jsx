@@ -1,50 +1,33 @@
 import { AlertCircle, History, Link2, Package } from 'lucide-react'
 import { formatDateTime } from '../../lib/format.js'
+import { signedQuantity } from '../../lib/mutationDisplay.js'
+import MutationTypeBadge from './MutationTypeBadge.jsx'
 
-const TYPE_META = {
-  masuk: {
-    label: 'Masuk',
-    badge: 'bg-success/10 text-success',
-  },
-  keluar: {
-    label: 'Keluar',
-    badge: 'bg-error/10 text-error',
-  },
-  penyesuaian: {
-    label: 'Penyesuaian',
-    badge: 'bg-warning/15 text-warning',
-  },
-  initial_stock: {
-    label: 'Stok awal',
-    badge: 'bg-pink-light text-pink-dark',
-  },
-}
+function ReferenceCell({ reference, onTransaction }) {
+  if (!reference?.id) return <span className="text-ink-muted">-</span>
 
-function TypeBadge({ type }) {
-  const meta = TYPE_META[type] ?? {
-    label: type || 'Mutasi',
-    badge: 'bg-pink-light text-pink-dark',
+  if (reference.linkable === false) {
+    return (
+      <span
+        title={reference.id}
+        className="font-mono text-[11px] text-ink-muted"
+      >
+        {reference.no}
+      </span>
+    )
   }
 
   return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${meta.badge}`}
+    <button
+      type="button"
+      onClick={() => onTransaction(reference.id)}
+      aria-label={`Buka transaksi ${reference.no}`}
+      className="inline-flex items-center gap-1 rounded font-mono text-[11px] font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
     >
-      {meta.label}
-    </span>
+      <Link2 className="size-3" />
+      {reference.no}
+    </button>
   )
-}
-
-function signedQuantity(entry) {
-  const fallback =
-    entry.type === 'keluar'
-      ? -Math.abs(Number(entry.quantity) || 0)
-      : Math.abs(Number(entry.quantity) || 0)
-  const raw = Number(entry.quantityChange)
-  const change = Number.isFinite(raw) ? raw : fallback
-  const sign = change > 0 ? '+' : change < 0 ? '−' : ''
-
-  return `${sign}${Math.abs(change)}`
 }
 
 function SkeletonRows() {
@@ -166,12 +149,14 @@ export default function StockHistoryList({
                     >
                       {entry.productName}
                     </button>
-                    <p className="mt-0.5 font-mono text-[11px] text-ink-muted">
-                      {entry.productBarcode}
-                    </p>
+                    {entry.productBarcode && (
+                      <p className="mt-0.5 font-mono text-[11px] text-ink-muted">
+                        {entry.productBarcode}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
-                    <TypeBadge type={entry.type} />
+                    <MutationTypeBadge type={entry.type} />
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-ink">
                     {signedQuantity(entry)}{' '}
@@ -183,19 +168,10 @@ export default function StockHistoryList({
                     {entry.notes || '-'}
                   </td>
                   <td className="hidden px-4 py-3 lg:table-cell">
-                    {entry.reference?.id ? (
-                      <button
-                        type="button"
-                        onClick={() => onTransaction(entry.reference.id)}
-                        aria-label={`Buka transaksi ${entry.reference.no}`}
-                        className="inline-flex items-center gap-1 rounded font-mono text-[11px] font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
-                      >
-                        <Link2 className="size-3" />
-                        {entry.reference.no}
-                      </button>
-                    ) : (
-                      <span className="text-ink-muted">-</span>
-                    )}
+                    <ReferenceCell
+                      reference={entry.reference}
+                      onTransaction={onTransaction}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <button
@@ -259,7 +235,7 @@ export default function StockHistoryList({
                       {formatDateTime(entry.createdAt)}
                     </p>
                   </div>
-                  <TypeBadge type={entry.type} />
+                  <MutationTypeBadge type={entry.type} />
                 </div>
 
                 <div className="flex items-center justify-between gap-3 rounded-xl bg-cream/50 px-3 py-2.5">
@@ -281,14 +257,13 @@ export default function StockHistoryList({
                     Riwayat
                   </button>
                   {entry.reference?.id && (
-                    <button
-                      type="button"
-                      onClick={() => onTransaction(entry.reference.id)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-pink-mist bg-surface px-2.5 py-1.5 font-mono text-[11px] font-semibold text-pink-dark transition hover:border-pink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
-                    >
+                    <span className="inline-flex items-center gap-1 rounded-lg border border-pink-mist bg-surface px-2.5 py-1.5 font-mono text-[11px] font-semibold text-pink-dark">
                       <Link2 className="size-3.5" />
-                      {entry.reference.no}
-                    </button>
+                      <ReferenceCell
+                        reference={entry.reference}
+                        onTransaction={onTransaction}
+                      />
+                    </span>
                   )}
                 </div>
               </li>

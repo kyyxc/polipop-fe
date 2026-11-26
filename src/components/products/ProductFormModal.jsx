@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { AlertCircle, ImagePlus, LoaderCircle, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { AlertCircle, ImagePlus, LoaderCircle, Trash2, X } from 'lucide-react'
+import { productImagePlaceholder } from '../../data/mockKasir.js'
 import {
   readFileAsDataUrl,
   validateImageFile,
@@ -85,9 +86,11 @@ export default function ProductFormModal({
   product = null,
   categories = [],
   onSubmit,
+  onDeleteImage,
   onClose,
 }) {
   const isEdit = mode === 'edit'
+  const fileInputRef = useRef(null)
   const [form, setForm] = useState(() => ({
     barcode: product?.barcode ?? '',
     name: product?.name ?? '',
@@ -98,8 +101,20 @@ export default function ProductFormModal({
   }))
   const [imagePreview, setImagePreview] = useState(product?.image ?? '')
   const [imageFile, setImageFile] = useState(null)
+  const [confirmDeleteImage, setConfirmDeleteImage] = useState(false)
+  const [deletingImage, setDeletingImage] = useState(false)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+
+  // Hanya gambar asli yang sudah tersimpan yang bisa dihapus; placeholder
+  // berarti produk memang tidak punya gambar, dan file baru belum diunggah.
+  const canDeleteImage =
+    isEdit &&
+    Boolean(product?.id) &&
+    Boolean(product.image) &&
+    product.image !== productImagePlaceholder &&
+    Boolean(imagePreview) &&
+    !imageFile
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }))
@@ -121,9 +136,28 @@ export default function ProductFormModal({
       const dataUrl = await readFileAsDataUrl(file)
       setImagePreview(dataUrl)
       setImageFile(file)
+      setConfirmDeleteImage(false)
       setErrors((current) => ({ ...current, image: '' }))
     } catch {
       setErrors((current) => ({ ...current, image: 'Gagal membaca gambar.' }))
+    }
+  }
+
+  const handleDeleteImage = async () => {
+    if (!canDeleteImage || deletingImage || submitting || !onDeleteImage) return
+
+    setDeletingImage(true)
+    try {
+      await onDeleteImage(product.id)
+      setImagePreview('')
+      setImageFile(null)
+      setConfirmDeleteImage(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      setErrors((current) => ({ ...current, image: '' }))
+    } catch {
+      // Toast error sudah ditampilkan halaman induk; biarkan gambar tetap ada.
+    } finally {
+      setDeletingImage(false)
     }
   }
 
@@ -160,7 +194,7 @@ export default function ProductFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      busy={submitting}
+      busy={submitting || deletingImage}
       labelledBy="product-form-title"
       describedBy="product-form-description"
       className="max-w-2xl"
@@ -302,11 +336,12 @@ export default function ProductFormModal({
                 >
                   {imagePreview ? 'Ganti gambar' : 'Pilih gambar'}
                   <input
+                    ref={fileInputRef}
                     id="product-image"
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     onChange={handleImageChange}
-                    disabled={submitting}
+                    disabled={submitting || deletingImage}
                     aria-invalid={Boolean(errors.image)}
                     aria-describedby={errors.image ? 'product-image-error' : undefined}
                     className="sr-only"
@@ -316,6 +351,43 @@ export default function ProductFormModal({
                   JPG, JPEG, PNG, atau WebP. Maksimal 2 MB.
                 </p>
                 <FieldError id="product-image-error" message={errors.image} />
+                {canDeleteImage && !confirmDeleteImage && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteImage(true)}
+                    disabled={submitting || deletingImage}
+                    className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-xl border border-error/30 px-3 text-xs font-semibold text-error transition hover:bg-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Trash2 className="size-3.5" />
+                    Hapus gambar
+                  </button>
+                )}
+                {canDeleteImage && confirmDeleteImage && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-error/30 bg-error/5 px-3 py-2">
+                    <span className="text-xs font-medium text-ink">
+                      Yakin hapus gambar ini?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteImage(false)}
+                      disabled={deletingImage}
+                      className="h-8 rounded-lg px-2 text-xs font-semibold text-ink-muted transition hover:bg-pink-light hover:text-pink-dark disabled:opacity-60"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteImage}
+                      disabled={deletingImage || submitting}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-error px-3 text-xs font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {deletingImage && (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      )}
+                      {deletingImage ? 'Menghapus...' : 'Ya, hapus'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

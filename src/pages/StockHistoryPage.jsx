@@ -161,7 +161,7 @@ export default function StockHistoryPage({ onNavigate }) {
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Nama atau barcode produk"
+              placeholder="Nama produk"
               className="h-11 w-full rounded-xl border border-pink-mist bg-surface pl-11 pr-4 text-sm text-ink outline-none transition placeholder:text-ink-muted/70 focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
             />
           </div>
@@ -187,10 +187,12 @@ export default function StockHistoryPage({ onNavigate }) {
             }
           >
             <option value="">Semua tipe</option>
-            <option value="masuk">Masuk</option>
-            <option value="keluar">Keluar</option>
-            <option value="penyesuaian">Penyesuaian</option>
-            <option value="initial_stock">Stok awal</option>
+            <option value="initial">Stok awal</option>
+            <option value="restock">Restock</option>
+            <option value="return">Retur</option>
+            <option value="sale">Penjualan</option>
+            <option value="damaged">Barang rusak</option>
+            <option value="adjustment">Penyesuaian</option>
           </Select>
         </div>
 

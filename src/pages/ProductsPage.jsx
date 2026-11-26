@@ -18,11 +18,13 @@ import {
 import Select from '../components/ui/Select.jsx'
 import { useToast } from '../components/ui/toast-context.js'
 import { useCart } from '../context/cart-context.js'
+import { productImagePlaceholder } from '../data/mockKasir.js'
 import { buildHash, readQueryParams } from '../lib/hashQuery.js'
 import { downloadProductsExcel, downloadProductsPdf } from '../lib/productExport.js'
 import {
   createProduct,
   deactivateProduct,
+  deleteProductImage,
   getActiveCategories,
   getExportProducts,
   getProducts,
@@ -190,6 +192,25 @@ export default function ProductsPage({ onNavigate }) {
       refreshData()
     } catch (err) {
       showToast('error', err.message || 'Gagal menyimpan produk.')
+      throw err
+    }
+  }
+
+  const handleDeleteImage = async (id) => {
+    try {
+      await deleteProductImage(id)
+      showToast('success', 'Gambar produk berhasil dihapus')
+      setFormState((current) =>
+        current?.product?.id === id
+          ? {
+              ...current,
+              product: { ...current.product, image: productImagePlaceholder },
+            }
+          : current,
+      )
+      refreshData()
+    } catch (err) {
+      showToast('error', err.message || 'Gagal menghapus gambar produk.')
       throw err
     }
   }
@@ -454,6 +475,7 @@ export default function ProductsPage({ onNavigate }) {
           product={formState.product}
           categories={categories}
           onSubmit={handleFormSubmit}
+          onDeleteImage={handleDeleteImage}
           onClose={() => setFormState(null)}
         />
       )}

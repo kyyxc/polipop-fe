@@ -21,6 +21,16 @@ function FieldError({ id, message }) {
   )
 }
 
+const INCREASE_TYPES = ['restock', 'return']
+
+const TYPE_OPTIONS = [
+  { value: 'restock', label: 'Restock (tambah stok)' },
+  { value: 'return', label: 'Retur (tambah stok)' },
+  { value: 'sale', label: 'Penjualan (kurangi stok)' },
+  { value: 'damaged', label: 'Barang rusak (kurangi stok)' },
+  { value: 'adjustment', label: 'Penyesuaian (delta, boleh negatif)' },
+]
+
 export default function StockAdjustmentModal({
   open,
   product,
@@ -28,7 +38,7 @@ export default function StockAdjustmentModal({
   onSubmit,
   onClose,
 }) {
-  const [type, setType] = useState('masuk')
+  const [type, setType] = useState('restock')
   const [quantity, setQuantity] = useState('')
   const [notes, setNotes] = useState('')
   const [errors, setErrors] = useState({})
@@ -37,30 +47,37 @@ export default function StockAdjustmentModal({
   const currentStock = Number(product?.stock) || 0
   const unit = product?.unit || 'pcs'
   const parsedQuantity = Number(quantity)
-  const validQuantity =
-    quantity !== '' && Number.isInteger(parsedQuantity) && parsedQuantity > 0
+  const hasQuantity =
+    quantity !== '' &&
+    Number.isInteger(parsedQuantity) &&
+    parsedQuantity !== 0 &&
+    (type === 'adjustment' || parsedQuantity > 0)
+  const signedQuantity = !hasQuantity
+    ? 0
+    : type === 'adjustment'
       ? parsedQuantity
-      : 0
-  const previewStock =
-    type === 'penyesuaian'
-      ? validQuantity
-      : type === 'keluar'
-        ? Math.max(0, currentStock - validQuantity)
-        : currentStock + validQuantity
-  const quantityLabel =
-    type === 'penyesuaian' ? 'Stok Akhir' : 'Quantity'
+      : INCREASE_TYPES.includes(type)
+        ? parsedQuantity
+        : -parsedQuantity
+  const previewStock = currentStock + signedQuantity
+  const quantityLabel = type === 'adjustment' ? 'Delta stok' : 'Quantity'
 
   const validate = () => {
     const nextErrors = {}
-    const allowedTypes = allowAdjustment
-      ? ['masuk', 'keluar', 'penyesuaian']
-      : ['masuk', 'keluar']
+    const allowedTypes = TYPE_OPTIONS.filter(
+      (option) => allowAdjustment || option.value !== 'adjustment',
+    ).map((option) => option.value)
     if (!allowedTypes.includes(type)) {
       nextErrors.type = 'Jenis mutasi wajib dipilih'
     }
-    if (quantity === '' || !Number.isInteger(parsedQuantity) || parsedQuantity < 1) {
-      nextErrors.quantity = 'Jumlah stok harus lebih besar dari 0'
-    } else if (type === 'keluar' && parsedQuantity > currentStock) {
+    if (quantity === '' || !Number.isInteger(parsedQuantity)) {
+      nextErrors.quantity = 'Jumlah stok harus berupa angka'
+    } else if (!hasQuantity) {
+      nextErrors.quantity =
+        type === 'adjustment'
+          ? 'Delta stok harus berupa angka bukan nol'
+          : 'Jumlah stok harus lebih besar dari 0'
+    } else if (previewStock < 0) {
       nextErrors.quantity = 'Stok tidak mencukupi'
     }
     return nextErrors
@@ -79,7 +96,7 @@ export default function StockAdjustmentModal({
     setErrors({})
     setSubmitting(true)
     try {
-      await onSubmit({ type, quantity: parsedQuantity, notes })
+      await onSubmit({ type, quantity: signedQuantity, notes })
     } catch (err) {
       if (err?.fields) setErrors(err.fields)
     } finally {
@@ -145,11 +162,13 @@ export default function StockAdjustmentModal({
               invalid={Boolean(errors.type)}
               aria-describedby={errors.type ? 'stock-type-error' : undefined}
             >
-              <option value="masuk">Tambah Stok (masuk)</option>
-              <option value="keluar">Kurangi Stok (keluar)</option>
-              {allowAdjustment && (
-                <option value="penyesuaian">Penyesuaian (stok akhir)</option>
-              )}
+              {TYPE_OPTIONS.filter(
+                (option) => allowAdjustment || option.value !== 'adjustment',
+              ).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </Select>
             <FieldError id="stock-type-error" message={errors.type} />
           </div>
@@ -161,7 +180,7 @@ export default function StockAdjustmentModal({
             <input
               id="stock-quantity"
               type="number"
-              min="1"
+              min={type === 'adjustment' ? undefined : 1}
               step="1"
               inputMode="numeric"
               value={quantity}
@@ -188,6 +207,7 @@ export default function StockAdjustmentModal({
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               disabled={submitting}
+              maxLength={1000}
               rows={3}
               placeholder="Contoh: Penambahan stok dari supplier"
               className="mt-1.5 w-full resize-none rounded-xl border border-pink-mist bg-surface px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink-muted/70 focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70 disabled:opacity-70"
@@ -203,21 +223,13 @@ export default function StockAdjustmentModal({
             </p>
             <p className="mt-1 text-sm font-semibold text-ink">
               {currentStock} {unit}
-              {type === 'penyesuaian' ? (
-                <span className="mx-2 text-pink-dark" aria-hidden="true">
-                  →
-                </span>
-              ) : (
-                <>
-                  <span className="mx-2 text-pink-dark" aria-hidden="true">
-                    {type === 'masuk' ? '+' : '−'}
-                  </span>
-                  {validQuantity} {unit}
-                  <span className="mx-2 text-ink-muted" aria-hidden="true">
-                    =
-                  </span>
-                </>
-              )}
+              <span className="mx-2 text-pink-dark" aria-hidden="true">
+                {signedQuantity < 0 ? '−' : '+'}
+              </span>
+              {Math.abs(signedQuantity)} {unit}
+              <span className="mx-2 text-ink-muted" aria-hidden="true">
+                =
+              </span>
               <span className="font-bold text-pink-dark">
                 {previewStock} {unit}
               </span>

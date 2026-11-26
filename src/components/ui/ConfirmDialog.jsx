@@ -1,109 +1,116 @@
 import { useEffect, useId, useRef } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
+
+const toneStyles = {
+  danger: {
+    icon: AlertTriangle,
+    iconClass: 'bg-error/10 text-error',
+    confirmClass: 'bg-error text-white shadow-[0_12px_24px_-12px_rgba(220,38,38,0.7)] hover:brightness-95 focus-visible:ring-error/20',
+  },
+  primary: {
+    icon: AlertTriangle,
+    iconClass: 'bg-pink-light text-pink-dark',
+    confirmClass: 'bg-pink-dark text-white shadow-[0_12px_24px_-12px_#c2607a] hover:brightness-95 focus-visible:ring-pink-light',
+  },
+}
 
 export default function ConfirmDialog({
   open,
+  icon: IconProp,
   title,
   description,
   confirmLabel = 'Konfirmasi',
+  busyLabel,
   cancelLabel = 'Batal',
-  busyLabel = 'Memproses...',
-  loading = false,
   tone = 'primary',
-  icon: Icon,
+  loading = false,
   onConfirm,
   onCancel,
 }) {
-  const dialogRef = useRef(null)
   const titleId = useId()
   const descriptionId = useId()
+  const confirmRef = useRef(null)
+  const style = toneStyles[tone] ?? toneStyles.primary
+  const Icon = IconProp ?? style.icon
+  const { iconClass, confirmClass } = style
 
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
+    if (!open) return undefined
 
-    if (open && !dialog.open) dialog.showModal()
-    if (!open && dialog.open) dialog.close()
-  }, [open])
+    confirmRef.current?.focus()
 
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog || !open) return undefined
-
-    const handleCancel = (event) => {
-      event.preventDefault()
-      if (!loading) onCancel()
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onCancel()
     }
 
-    dialog.addEventListener('cancel', handleCancel)
-    return () => dialog.removeEventListener('cancel', handleCancel)
-  }, [open, loading, onCancel])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, onCancel])
 
-  const handleBackdropClick = (event) => {
-    if (event.target === dialogRef.current && !loading) onCancel()
-  }
-
-  const isDanger = tone === 'danger'
-  const iconClass = isDanger
-    ? 'bg-error/10 text-error'
-    : 'bg-pink-light text-pink-dark'
-  const confirmClass = isDanger
-    ? 'bg-error text-white hover:brightness-95 focus-visible:ring-error/20'
-    : 'bg-pink-dark text-white hover:brightness-95 focus-visible:ring-pink-light'
+  if (!open) return null
 
   return (
-    <dialog
-      ref={dialogRef}
-      onClick={handleBackdropClick}
-      aria-labelledby={titleId}
-      aria-describedby={description ? descriptionId : undefined}
-      className="w-[min(420px,calc(100vw-2rem))] rounded-3xl border border-pink-mist bg-surface p-0 text-ink shadow-[0_28px_70px_-30px_rgba(26,26,26,0.6)] backdrop:bg-ink/40"
-    >
-      <div className="p-6 sm:p-7">
-        <div className="flex items-start gap-4">
-          {Icon && (
-            <span
-              aria-hidden="true"
-              className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${iconClass}`}
-            >
-              <Icon className="size-5" />
-            </span>
-          )}
-          <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="text-lg font-bold tracking-tight text-ink">
-              {title}
-            </h2>
-            {description && (
-              <p
-                id={descriptionId}
-                className="mt-2 text-sm leading-relaxed text-ink-muted"
-              >
-                {description}
-              </p>
-            )}
-          </div>
-        </div>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 px-4 py-6 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="Tutup dialog"
+        tabIndex={-1}
+        onClick={onCancel}
+        className="absolute inset-0 cursor-default"
+      />
 
-        <div className="mt-7 flex flex-wrap justify-end gap-3">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        className="relative w-full max-w-md rounded-3xl border border-pink-mist bg-surface p-6 shadow-[0_30px_70px_-30px_rgba(26,26,26,0.5)] sm:p-7"
+      >
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Tutup"
+          className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-lg text-ink-muted transition hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
+        >
+          <X className="size-4" />
+        </button>
+
+        <span
+          className={`flex size-11 items-center justify-center rounded-2xl ${iconClass}`}
+        >
+          <Icon className="size-5" />
+        </span>
+
+        <h2
+          id={titleId}
+          className="mt-4 pr-6 text-lg font-bold tracking-tight text-ink"
+        >
+          {title}
+        </h2>
+        <p id={descriptionId} className="mt-2 text-sm leading-relaxed text-ink-muted">
+          {description}
+        </p>
+
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
           <button
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="h-11 rounded-xl border border-pink-mist bg-surface px-4 text-sm font-semibold text-ink-muted transition hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-11 rounded-xl border border-pink-mist bg-surface px-4 text-sm font-semibold text-ink-muted transition hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary disabled:opacity-60"
           >
             {cancelLabel}
           </button>
           <button
+            ref={confirmRef}
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 disabled:cursor-not-allowed disabled:opacity-70 ${confirmClass}`}
+            className={`inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 disabled:cursor-not-allowed disabled:opacity-70 ${confirmClass}`}
           >
-            {loading && <LoaderCircle className="size-4 animate-spin" />}
-            {loading ? busyLabel : confirmLabel}
+            {loading ? busyLabel || confirmLabel : confirmLabel}
           </button>
         </div>
       </div>
-    </dialog>
+    </div>
   )
 }

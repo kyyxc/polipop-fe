@@ -6,20 +6,18 @@ import {
 } from '../data/mockKasir.js'
 import { getCategoryOptions } from './categoryService.js'
 
-// Halaman Produk memakai API. Data lokal/localStorage tetap dipertahankan untuk
-// Kasir, QR, dan riwayat stok yang belum tersedia endpoint API-nya.
+// Halaman Produk dan riwayat mutasi memakai API. Data lokal/localStorage tetap
+// dipertahankan untuk Kasir dan QR.
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 const PRODUCTS_KEY = 'polipop-products'
 const CATEGORIES_KEY = 'polipop-categories'
 const PRODUCTS_EVENT = 'polipop-products-changed'
-const PER_PAGE_OPTIONS = [10, 25, 50]
 const SORT_FIELDS = ['name', 'price', 'stock', 'created_at']
+const MUTATION_TYPES = ['initial', 'restock', 'return', 'sale', 'damaged', 'adjustment']
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const DEFAULT_DATE = '2026-01-01T00:00:00'
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Menampilkan nama kategori API pada data produk lokal (Kasir/QR).
 let categoryNameCache = new Map()
@@ -66,6 +64,10 @@ function localizeMessage(code, rawMessage) {
   if (text.includes('barcode already')) return 'Barcode sudah digunakan'
   if (text.includes('category not found')) return 'Kategori tidak ditemukan'
   if (text.includes('no fields to update')) return 'Tidak ada perubahan untuk disimpan'
+  if (text.includes('insufficient stock')) return 'Stok tidak mencukupi'
+  if (text.includes('date_from must not be after date_to')) {
+    return 'Tanggal akhir tidak boleh sebelum tanggal mulai'
+  }
   if (text.includes('at most')) return 'Ukuran gambar maksimal 2 MB'
   if (text.includes('valid jpeg') || text.includes('file is empty')) {
     return 'Format gambar tidak didukung'
@@ -90,6 +92,11 @@ function localizeFieldMessage(message) {
   ) {
     return 'Nilai tidak valid'
   }
+  if (text.includes('insufficient stock')) return 'Stok tidak mencukupi'
+  if (text.includes('must not be zero')) return 'Jumlah tidak boleh nol'
+  if (text.includes('must be positive')) return 'Jumlah harus positif'
+  if (text.includes('must be negative')) return 'Jumlah harus negatif'
+  if (text.includes('too large')) return 'Nilai terlalu besar'
   return message
 }
 
@@ -99,6 +106,10 @@ function mapFieldErrors(rawErrors) {
     category_id: 'categoryId',
     stock: 'initial_stock',
     file: 'image',
+    mutation_type: 'type',
+    product_id: 'productId',
+    date_from: 'from',
+    date_to: 'to',
   }
 
   rawErrors.forEach((error) => {
@@ -168,10 +179,6 @@ function normalizeProductFromApi(raw) {
     createdAt: raw?.created_at ?? raw?.createdAt ?? '',
     updatedAt: raw?.updated_at ?? raw?.updatedAt ?? '',
   }
-}
-
-function keyOf(value) {
-  return String(value ?? '').toLocaleLowerCase('id-ID')
 }
 
 // Contoh mutasi agar halaman riwayat stok memiliki data lintas produk saat
@@ -390,71 +397,77 @@ export async function getProductById(id) {
   return normalizeProductFromApi(payload.data)
 }
 
-// Endpoint mutasi belum tersedia; halaman detail menampilkan pesan ini.
-export async function getProductMutations() {
-  throw new ProductApiError(
-    'UNAVAILABLE',
-    'Riwayat mutasi produk belum tersedia.',
-    {},
-    501,
-  )
+// GET /mutations mengembalikan mutasi seluruh produk milik user yang login.
+function buildMutationQuery(filters = {}) {
+  const params = new URLSearchParams({
+    page: String(filters.page ?? 1),
+    per_page: String(filters.perPage ?? filters.per_page ?? 10),
+  })
+
+  if (filters.q) params.set('search', String(filters.q).trim())
+  if (filters.productId) params.set('product_id', String(filters.productId))
+  if (MUTATION_TYPES.includes(filters.type)) {
+    params.set('mutation_type', filters.type)
+  }
+  if (filters.from) params.set('date_from', String(filters.from))
+  if (filters.to) params.set('date_to', String(filters.to))
+  return params
 }
 
-// Simulasi GET /stock/history — menggabungkan mutasi seluruh produk warung.
-export async function getStockHistory(filters = {}) {
-  await delay(400)
+function normalizeMutationFromApi(raw) {
+  const quantity = Number(raw?.quantity) || 0
+  const referenceId = raw?.reference_id ? String(raw.reference_id) : ''
+  return {
+    id: String(raw?.id ?? ''),
+    productId: String(raw?.product?.id ?? ''),
+    productName: String(raw?.product?.name ?? '-'),
+    // Response API tidak menyertakan barcode produk.
+    productBarcode: '',
+    productUnit: String(raw?.product?.unit ?? 'pcs'),
+    type: MUTATION_TYPES.includes(raw?.mutation_type)
+      ? raw.mutation_type
+      : String(raw?.mutation_type ?? ''),
+    quantity: Math.abs(quantity),
+    quantityChange: quantity,
+    previousStock: Number(raw?.stock_before) || 0,
+    stockAfter: Number(raw?.stock_after) || 0,
+    notes: String(raw?.notes ?? ''),
+    // reference_id bukan ID transaksi lokal, jadi ditampilkan sebagai teks.
+    reference: referenceId
+      ? { id: referenceId, no: referenceId.slice(0, 8), linkable: false }
+      : null,
+    createdAt: String(raw?.created_at ?? ''),
+  }
+}
 
-  const query = keyOf(filters.q).trim()
-  const type = ['masuk', 'keluar', 'penyesuaian', 'initial_stock'].includes(
-    filters.type,
-  )
-    ? filters.type
-    : ''
-  const from = filters.from ? String(filters.from) : ''
-  const to = filters.to ? String(filters.to) : ''
-
-  const rows = readStore()
-    .filter((product) => product.warungId === currentWarungId)
-    .flatMap((product) =>
-      (Array.isArray(product.history) ? product.history : []).map((entry) => ({
-        ...entry,
-        productId: product.id,
-        productName: product.name,
-        productBarcode: product.barcode,
-        productUnit: product.unit,
-      })),
-    )
-    .filter((entry) => !query || keyOf(entry.productName).includes(query) || keyOf(entry.productBarcode).includes(query))
-    .filter((entry) => !type || entry.type === type)
-    .filter((entry) => {
-      const date = String(entry.createdAt).slice(0, 10)
-      if (from && date < from) return false
-      if (to && date > to) return false
-      return true
-    })
-    .sort((left, right) => {
-      const byDate = String(right.createdAt).localeCompare(String(left.createdAt))
-      return byDate || String(right.id).localeCompare(String(left.id))
-    })
-
-  const requestedPerPage = Number(filters.per_page ?? filters.perPage)
-  const perPage = PER_PAGE_OPTIONS.includes(requestedPerPage)
-    ? requestedPerPage
-    : 10
-  const totalPages = Math.max(1, Math.ceil(rows.length / perPage))
-  const requestedPage = Number(filters.page)
-  const page =
-    Number.isFinite(requestedPage) && requestedPage > 0
-      ? Math.min(Math.floor(requestedPage), totalPages)
-      : 1
+async function fetchMutations(filters = {}) {
+  const params = buildMutationQuery(filters)
+  const payload = await request(`/mutations?${params.toString()}`)
+  const meta = payload?.meta ?? {}
+  const items = Array.isArray(payload?.data)
+    ? payload.data.map(normalizeMutationFromApi)
+    : []
 
   return {
-    items: rows.slice((page - 1) * perPage, page * perPage),
-    total: rows.length,
-    page,
-    perPage,
-    totalPages,
+    items,
+    total: Number(meta.total ?? items.length) || 0,
+    page: Number(meta.page ?? filters.page ?? 1) || 1,
+    perPage: Number(meta.per_page ?? filters.perPage ?? 10) || 10,
+    totalPages: Math.max(1, Number(meta.total_pages ?? 1) || 1),
   }
+}
+
+// GET /stock/history — sekarang memakai GET /mutations dari backend.
+export async function getStockHistory(filters = {}) {
+  return fetchMutations(filters)
+}
+
+// GET /mutations?product_id=... untuk riwayat satu produk.
+export async function getProductMutations(productId, filters = {}) {
+  if (!productId) {
+    return { items: [], total: 0, page: 1, perPage: filters.perPage ?? 10, totalPages: 1 }
+  }
+  return fetchMutations({ ...filters, productId })
 }
 
 // GET /categories yang dipakai form produk (data kategori berasal dari API).
@@ -539,14 +552,20 @@ export async function updateProduct(id, payload) {
   return updated
 }
 
-// Endpoint penyesuaian stok belum tersedia di backend.
-export async function adjustStock() {
-  throw new ProductApiError(
-    'UNAVAILABLE',
-    'Penyesuaian stok belum tersedia.',
-    {},
-    501,
-  )
+// POST /mutations — mencatat mutasi manual dan mengubah stok di backend.
+// payload.quantity sudah bertanda: positif untuk restock/return, negatif untuk
+// sale/damaged, dan bebas (non-nol) untuk adjustment.
+export async function adjustStock(productId, payload) {
+  const body = {
+    product_id: String(productId),
+    mutation_type: String(payload?.type ?? ''),
+    quantity: Number(payload?.quantity),
+  }
+  const notes = String(payload?.notes ?? '').trim()
+  if (notes) body.notes = notes
+
+  const apiPayload = await request('/mutations', { method: 'POST', body })
+  return normalizeMutationFromApi(apiPayload?.data)
 }
 
 // DELETE /products/:id (soft delete di backend).

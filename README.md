@@ -145,7 +145,7 @@ Palet warna utama (**Pink Sakura**):
 Detail lengkap dan aturan penggunaan: [`design/color-palete.md`](design/color-palete.md).
 
 ## 📖 Dokumentasi Halamanopen 
-Pastikan `VITE_API_URL` di-set saat build agar menunjuk ke backend produksi.
+Pastikan `VITE_API_URL` di-set saat build agar menunjuk ke backend produksi. Untuk link "Hubungi admin outlet", set `VITE_ADMIN_WHATSAPP` (format `62...`) di file `.env`.
 
 ## 📝 Catatan
 
@@ -155,4 +155,3 @@ Pastikan `VITE_API_URL` di-set saat build agar menunjuk ke backend produksi.
 ## 📄 Lisensi
 
 Proyek privat — hak cipta pemilik repositori.
-c
