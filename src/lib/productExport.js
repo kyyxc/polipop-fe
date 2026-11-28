@@ -1,12 +1,9 @@
 import { formatRupiah } from './format.js'
 
-const PDF_CDN =
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js'
 const XLSX_CDN = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
 
 const HEADERS = ['No', 'Barcode', 'Nama', 'Category', 'Harga', 'Stock', 'Unit']
 
-let pdfPromise = null
 let xlsxPromise = null
 
 function loadScript(url) {
@@ -19,22 +16,6 @@ function loadScript(url) {
       reject(new Error('Gagal memuat library export. Periksa koneksi internet.'))
     document.head.appendChild(script)
   })
-}
-
-async function ensurePdf() {
-  if (window.jspdf?.jsPDF) return window.jspdf.jsPDF
-  if (!pdfPromise) {
-    pdfPromise = loadScript(PDF_CDN)
-      .then(() => {
-        if (!window.jspdf?.jsPDF) throw new Error('Library PDF tidak tersedia.')
-        return window.jspdf.jsPDF
-      })
-      .catch((error) => {
-        pdfPromise = null
-        throw error
-      })
-  }
-  return pdfPromise
 }
 
 async function ensureXlsx() {
@@ -96,7 +77,7 @@ function filterDescription(filters = {}) {
 }
 
 export async function downloadProductsPdf(products, filters = {}) {
-  const JsPDF = await ensurePdf()
+  const { jsPDF } = await import('jspdf')
   const rows = toRows(products)
   const widths = [10, 34, 54, 36, 32, 18, 20]
   const numericColumns = new Set([0, 5])
@@ -105,7 +86,7 @@ export async function downloadProductsPdf(products, filters = {}) {
   const startX = (index) =>
     margin + widths.slice(0, index).reduce((sum, width) => sum + width, 0)
 
-  const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageHeight = doc.internal.pageSize.getHeight()
   let y = 0
 

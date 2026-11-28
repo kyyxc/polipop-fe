@@ -15,6 +15,7 @@ import {
 } from '../components/ui/DropdownMenu.jsx'
 import DateInput from '../components/ui/DateInput.jsx'
 import Select from '../components/ui/Select.jsx'
+import { useToast } from '../components/ui/toast-context.js'
 import { buildHash, readQueryParams } from '../lib/hashQuery.js'
 import {
   downloadTransactionsExcel,
@@ -80,6 +81,7 @@ function ExportButton({
 }
 
 export default function TransactionsPage({ onNavigate }) {
+  const { showToast } = useToast()
   const [filters, setFilters] = useState(initialFilters)
   const [searchInput, setSearchInput] = useState(filters.q)
   const [dateError, setDateError] = useState('')
@@ -174,13 +176,23 @@ export default function TransactionsPage({ onNavigate }) {
     setExporting(format)
     try {
       const rows = await getExportTransactions(filtersRef.current)
+      if (rows.length === 0) {
+        const message = 'Tidak ada transaksi untuk diekspor.'
+        setExportError(message)
+        showToast('error', message)
+        return
+      }
       if (format === 'pdf') {
         await downloadTransactionsPdf(rows, filtersRef.current)
+        showToast('success', 'File PDF berhasil dibuat')
       } else {
         await downloadTransactionsExcel(rows)
+        showToast('success', 'File Excel berhasil dibuat')
       }
     } catch (err) {
-      setExportError(err.message || 'Gagal mengekspor transaksi.')
+      const message = err.message || 'Gagal mengekspor transaksi.'
+      setExportError(message)
+      showToast('error', message)
     } finally {
       setExporting(null)
     }

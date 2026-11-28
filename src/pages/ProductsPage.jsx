@@ -232,6 +232,12 @@ export default function ProductsPage({ onNavigate }) {
     setExporting(format)
     try {
       const rows = await getExportProducts(filtersRef.current)
+      if (rows.length === 0) {
+        const message = 'Tidak ada produk untuk diekspor.'
+        setExportError(message)
+        showToast('error', message)
+        return
+      }
       if (format === 'pdf') {
         await downloadProductsPdf(rows, filtersRef.current)
         showToast('success', 'File PDF berhasil dibuat')
