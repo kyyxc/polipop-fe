@@ -7,6 +7,7 @@ import {
   Printer,
   ReceiptText,
 } from 'lucide-react'
+import { OUTLET_NAME } from '../config/app.js'
 import { useCart } from '../context/cart-context.js'
 import { formatDateLong, formatRupiah, formatTime } from '../lib/format.js'
 import {
@@ -298,6 +299,12 @@ export default function TransactionDetailPage({ transactionId, onNavigate }) {
                     label="Diskon Transaksi"
                     value={formatRupiah(totals.transactionDiscount)}
                   />
+                  {transaction.discount?.name && (
+                    <SummaryRow
+                      label="Diskon Diterapkan"
+                      value={transaction.discount.name}
+                    />
+                  )}
                   <SummaryRow
                     label="Total"
                     value={formatRupiah(totals.total)}
@@ -326,7 +333,7 @@ export default function TransactionDetailPage({ transactionId, onNavigate }) {
 
             <section className="print-receipt" aria-hidden="true">
               <h1>Polipop Kasir</h1>
-              <p>Outlet Sudirman</p>
+              <p>{OUTLET_NAME}</p>
               <hr />
               <div className="receipt-row">
                 <span>No. Transaksi</span>
@@ -378,6 +385,12 @@ export default function TransactionDetailPage({ transactionId, onNavigate }) {
                 <span>Diskon Transaksi</span>
                 <span>{formatRupiah(totals.transactionDiscount)}</span>
               </div>
+              {transaction.discount?.name && (
+                <div className="receipt-row">
+                  <span>Diskon Diterapkan</span>
+                  <span>{transaction.discount.name}</span>
+                </div>
+              )}
               <hr />
               <div className="receipt-row receipt-total">
                 <span>Total</span>

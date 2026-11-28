@@ -1,26 +1,14 @@
-import { currentUserId, mockCategories } from '../data/mockCategories.js'
-import {
-  currentWarungId,
-  mockProducts,
-  productImagePlaceholder,
-} from '../data/mockKasir.js'
+import { productImagePlaceholder } from '../config/images.js'
 import { getCategoryOptions } from './categoryService.js'
 
-// Halaman Produk dan riwayat mutasi memakai API. Data lokal/localStorage tetap
-// dipertahankan untuk Kasir dan QR.
+// Seluruh data produk/kategori/mutasi berasal dari backend. Tidak ada fallback
+// localStorage atau data contoh yang dipakai saat runtime.
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
-const PRODUCTS_KEY = 'polipop-products'
-const CATEGORIES_KEY = 'polipop-categories'
-const PRODUCTS_EVENT = 'polipop-products-changed'
 const SORT_FIELDS = ['name', 'price', 'stock', 'created_at']
 const MUTATION_TYPES = ['initial', 'restock', 'return', 'sale', 'damaged', 'adjustment']
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const DEFAULT_DATE = '2026-01-01T00:00:00'
-
-// Menampilkan nama kategori API pada data produk lokal (Kasir/QR).
-let categoryNameCache = new Map()
 
 export class ProductApiError extends Error {
   constructor(code, message, fields = {}, status = null) {
@@ -174,158 +162,14 @@ function normalizeProductFromApi(raw) {
     price: Math.max(0, Number(raw?.price) || 0),
     stock: Math.max(0, Number(raw?.stock) || 0),
     unit: String(raw?.unit ?? 'pcs'),
-    active: true,
+    active:
+      raw?.is_active == null && raw?.active == null
+        ? true
+        : Boolean(raw.is_active ?? raw.active),
     history: [],
     createdAt: raw?.created_at ?? raw?.createdAt ?? '',
     updatedAt: raw?.updated_at ?? raw?.updatedAt ?? '',
   }
-}
-
-// Contoh mutasi agar halaman riwayat stok memiliki data lintas produk saat
-// pertama dibuka. Referensi memakai nomor transaksi dari data contoh.
-const SEEDED_MUTATIONS = {
-  'prod-01': [
-    { type: 'masuk', quantity: 10, createdAt: '2026-11-18T08:10:00', notes: 'Penerimaan supplier' },
-    { type: 'keluar', quantity: 1, createdAt: '2026-11-22T17:40:00', notes: 'Penjualan', reference: 'TRX-20261122-008' },
-    { type: 'keluar', quantity: 2, createdAt: '2026-11-23T14:30:00', notes: 'Penjualan', reference: 'TRX-20261123-006' },
-  ],
-  'prod-03': [
-    { type: 'keluar', quantity: 2, createdAt: '2026-11-21T20:02:00', notes: 'Penjualan', reference: 'TRX-20261121-012' },
-    { type: 'keluar', quantity: 1, createdAt: '2026-11-23T11:45:00', notes: 'Penjualan', reference: 'TRX-20261123-004' },
-  ],
-  'prod-04': [
-    { type: 'masuk', quantity: 6, createdAt: '2026-11-17T09:00:00', notes: 'Penerimaan supplier' },
-    { type: 'keluar', quantity: 1, createdAt: '2026-11-21T16:25:00', notes: 'Penjualan', reference: 'TRX-20261121-011' },
-    { type: 'keluar', quantity: 2, createdAt: '2026-11-22T19:05:00', notes: 'Penjualan', reference: 'TRX-20261122-009' },
-  ],
-  'prod-05': [
-    { type: 'keluar', quantity: 4, createdAt: '2026-11-22T15:18:00', notes: 'Penjualan', reference: 'TRX-20261122-007' },
-    { type: 'keluar', quantity: 2, createdAt: '2026-11-23T11:45:00', notes: 'Penjualan', reference: 'TRX-20261123-004' },
-  ],
-  'prod-07': [
-    { type: 'masuk', quantity: 10, createdAt: '2026-11-19T10:15:00', notes: 'Penerimaan supplier' },
-    { type: 'keluar', quantity: 2, createdAt: '2026-11-21T20:02:00', notes: 'Penjualan', reference: 'TRX-20261121-012' },
-    { type: 'keluar', quantity: 3, createdAt: '2026-11-23T13:12:00', notes: 'Penjualan', reference: 'TRX-20261123-005' },
-  ],
-}
-
-function seedHistory(product, stock) {
-  const examples = SEEDED_MUTATIONS[product.id] ?? []
-  const totalDelta = examples.reduce(
-    (sum, entry) =>
-      sum + (entry.type === 'keluar' ? -entry.quantity : entry.quantity),
-    0,
-  )
-  const initialStock = Math.max(0, stock - totalDelta)
-  let cursor = initialStock
-
-  const mutations = examples.map((entry, index) => {
-    const change = entry.type === 'keluar' ? -entry.quantity : entry.quantity
-    const previousStock = cursor
-    cursor += change
-
-    return {
-      id: `stock-${product.id}-seed-${index + 1}`,
-      type: entry.type,
-      quantity: entry.quantity,
-      quantityChange: change,
-      previousStock,
-      stockAfter: cursor,
-      notes: entry.notes,
-      reference: entry.reference
-        ? { type: 'transaction', id: entry.reference, no: entry.reference }
-        : null,
-      createdAt: entry.createdAt,
-      userId: currentUserId,
-    }
-  })
-
-  return [
-    {
-      id: `stock-${product.id}-initial`,
-      type: 'initial_stock',
-      quantity: initialStock,
-      quantityChange: initialStock,
-      previousStock: 0,
-      stockAfter: initialStock,
-      notes: 'Stok awal produk',
-      createdAt: product.createdAt ?? DEFAULT_DATE,
-      userId: currentUserId,
-    },
-    ...mutations,
-  ]
-}
-
-function normalizeProduct(raw) {
-  const stock = Math.max(0, Number(raw.stock) || 0)
-
-  return {
-    id: raw.id,
-    warungId: raw.warungId ?? currentWarungId,
-    categoryId: raw.categoryId ?? '',
-    barcode: raw.barcode ?? `PRD-${raw.id}`,
-    name: raw.name ?? '',
-    price: Math.max(0, Math.round(Number(raw.price) || 0)),
-    stock,
-    unit: raw.unit ?? 'pcs',
-    image: raw.image ?? productImagePlaceholder,
-    active: raw.active !== false,
-    history:
-      Array.isArray(raw.history) && raw.history.length > 0
-        ? raw.history
-        : seedHistory(raw, stock),
-    createdAt: raw.createdAt ?? DEFAULT_DATE,
-    updatedAt: raw.updatedAt ?? raw.createdAt ?? DEFAULT_DATE,
-  }
-}
-
-function readStore() {
-  try {
-    const raw = localStorage.getItem(PRODUCTS_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed.map(normalizeProduct)
-    }
-  } catch {
-    // Data rusak: gunakan data contoh agar halaman tetap dapat dipakai.
-  }
-  return mockProducts.map(normalizeProduct)
-}
-
-function writeStore(products) {
-  try {
-    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products))
-  } catch {
-    // localStorage tidak tersedia: perubahan tetap berlaku dalam sesi ini.
-  }
-  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-    window.dispatchEvent(new CustomEvent(PRODUCTS_EVENT))
-  }
-}
-
-function readCategories() {
-  try {
-    const raw = localStorage.getItem(CATEGORIES_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed
-    }
-  } catch {
-    // Abaikan data kategori yang rusak.
-  }
-  return mockCategories.map((category) => ({ ...category }))
-}
-
-function decorate(products) {
-  const names = new Map([
-    ...readCategories().map((category) => [category.id, category.name]),
-    ...categoryNameCache,
-  ])
-
-  return products.map((product) => ({
-    ...product,
-    categoryName: names.get(product.categoryId) ?? '-',
-  }))
 }
 
 function validateImageFile(file) {
@@ -416,7 +260,8 @@ function buildMutationQuery(filters = {}) {
 
 function normalizeMutationFromApi(raw) {
   const quantity = Number(raw?.quantity) || 0
-  const referenceId = raw?.reference_id ? String(raw.reference_id) : ''
+  const transactionId = raw?.transaction_id ? String(raw.transaction_id) : ''
+  const referenceId = transactionId || (raw?.reference_id ? String(raw.reference_id) : '')
   return {
     id: String(raw?.id ?? ''),
     productId: String(raw?.product?.id ?? ''),
@@ -432,9 +277,13 @@ function normalizeMutationFromApi(raw) {
     previousStock: Number(raw?.stock_before) || 0,
     stockAfter: Number(raw?.stock_after) || 0,
     notes: String(raw?.notes ?? ''),
-    // reference_id bukan ID transaksi lokal, jadi ditampilkan sebagai teks.
+    // Tautan aktif hanya bila backend mengirim transaction_id.
     reference: referenceId
-      ? { id: referenceId, no: referenceId.slice(0, 8), linkable: false }
+      ? {
+          id: referenceId,
+          no: String(raw?.transaction_number ?? referenceId.slice(0, 8)),
+          linkable: Boolean(transactionId),
+        }
       : null,
     createdAt: String(raw?.created_at ?? ''),
   }
@@ -472,9 +321,7 @@ export async function getProductMutations(productId, filters = {}) {
 
 // GET /categories yang dipakai form produk (data kategori berasal dari API).
 export async function getActiveCategories() {
-  const categories = await getCategoryOptions()
-  categoryNameCache = new Map(categories.map((category) => [category.id, category.name]))
-  return categories
+  return getCategoryOptions()
 }
 
 // PUT /products/:id/image — multipart/form-data dengan field "file".
@@ -571,71 +418,6 @@ export async function adjustStock(productId, payload) {
 // DELETE /products/:id (soft delete di backend).
 export async function deactivateProduct(id) {
   await request(`/products/${encodeURIComponent(id)}`, { method: 'DELETE' })
-}
-
-// Dipakai CartContext saat transaksi selesai: stok berkurang dan riwayat
-// mutasi bertipe keluar tetap tercatat.
-export function recordSaleStock(paidItems = [], transaction = null) {
-  const products = readStore()
-  const now = new Date().toISOString()
-  const reference = transaction?.id
-    ? {
-        type: 'transaction',
-        id: transaction.id,
-        no: transaction.no ?? transaction.id,
-      }
-    : null
-  let changed = false
-
-  const next = products.map((product) => {
-    const item = paidItems.find((entry) => entry.productId === product.id)
-    const quantity = Math.max(0, Number(item?.qty) || 0)
-    if (
-      !item ||
-      !quantity ||
-      !product.active ||
-      product.warungId !== currentWarungId
-    ) {
-      return product
-    }
-
-    changed = true
-    const stockAfter = Math.max(0, product.stock - quantity)
-    return {
-      ...product,
-      stock: stockAfter,
-      history: [
-        ...product.history,
-        {
-          id: `stock-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          type: 'keluar',
-          quantity,
-          quantityChange: stockAfter - product.stock,
-          previousStock: product.stock,
-          stockAfter,
-          notes: 'Penjualan',
-          reference,
-          createdAt: now,
-          userId: currentUserId,
-        },
-      ],
-      updatedAt: now,
-    }
-  })
-
-  if (changed) writeStore(next)
-  return next
-}
-
-// Pembacaan sinkron untuk shared state Kasir/QR.
-export function getAllProducts() {
-  return decorate(readStore())
-}
-
-export function subscribeProducts(listener) {
-  if (typeof window === 'undefined') return () => {}
-  window.addEventListener(PRODUCTS_EVENT, listener)
-  return () => window.removeEventListener(PRODUCTS_EVENT, listener)
 }
 
 export { validateImageFile, readFileAsDataUrl }

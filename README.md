@@ -13,10 +13,10 @@
 | 📦 **Produk** | Daftar produk, detail produk, ekspor data produk | ✅ |
 | 🏷️ **Kategori** | Manajemen kategori produk | ✅ |
 | 🧾 **Transaksi** | Riwayat transaksi, detail transaksi, ekspor data | ✅ |
-| 📷 **Scan QR** | Demo pemindaian QR produk | 🧪 Demo |
-| 💸 **Diskon** | Manajemen diskon | 🚧 Coming soon |
-| 📊 **Inventori** | Riwayat mutasi stok | 🚧 Coming soon |
-| ⚙️ **Pengaturan** | Pengaturan warung | 🚧 Coming soon |
+| 📷 **Scan QR** | Pemindaian QR produk dari katalog API | ✅ |
+| 💸 **Diskon** | Manajemen diskon + penerapan otomatis saat Kasir | ✅ |
+| 📊 **Inventori** | Riwayat mutasi stok dari API | ✅ |
+| ⚙️ **Pengaturan** | Tema & identitas aplikasi (dari environment) | ✅ |
 
 Fitur tambahan:
 
@@ -121,14 +121,16 @@ Aplikasi menggunakan **hash-based routing** (tanpa React Router):
 |---|---|
 | `#/login` | Login |
 | `#/` | Kasir (halaman utama) |
-| `#/QR` | Scan QR (demo) |
+| `#/QR` | Scan QR produk |
 | `#/products` | Daftar produk |
 | `#/products/:id` | Detail produk |
 | `#/categories` | Kategori |
 | `#/accounts` | Akun |
 | `#/transactions` | Riwayat transaksi |
 | `#/transactions/:id` | Detail transaksi |
-| `#/discounts`, `#/inventory`, `#/settings` | Placeholder (coming soon) |
+| `#/discounts` | Manajemen diskon |
+| `#/stock/history` | Riwayat mutasi stok |
+| `#/settings` | Pengaturan tema & identitas aplikasi |
 
 ## 🎨 Desain
 
@@ -145,11 +147,12 @@ Palet warna utama (**Pink Sakura**):
 Detail lengkap dan aturan penggunaan: [`design/color-palete.md`](design/color-palete.md).
 
 ## 📖 Dokumentasi Halamanopen 
-Pastikan `VITE_API_URL` di-set saat build agar menunjuk ke backend produksi. Untuk link "Hubungi admin outlet", set `VITE_ADMIN_WHATSAPP` (format `62...`) di file `.env`.
+Pastikan `VITE_API_URL` di-set saat build agar menunjuk ke backend produksi. Set `VITE_APP_NAME` dan `VITE_OUTLET_NAME` untuk identitas struk. Untuk link "Hubungi admin outlet", set `VITE_ADMIN_WHATSAPP` (format `62...`) di file `.env`.
 
 ## 📝 Catatan
 
-- Beberapa halaman masih menggunakan **mock data** (`src/data/`) dan akan dihubungkan penuh ke backend secara bertahap.
+- Seluruh data bisnis berasal dari backend; tidak ada mock data yang dipakai saat runtime.
+- Backend belum menyediakan endpoint resolve QR atau pengaturan warung, jadi QR dicocokkan terhadap katalog API dan identitas aplikasi dikonfigurasi lewat environment.
 - Proyek ini menggunakan JavaScript (bukan TypeScript) dengan JSDoc-friendly tooling dan path alias `@/`.
 
 ## 📄 Lisensi

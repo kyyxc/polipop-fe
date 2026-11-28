@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  BadgePercent,
   LoaderCircle,
   Minus,
   Plus,
@@ -7,15 +8,21 @@ import {
   Trash2,
   Wallet,
 } from 'lucide-react'
-import Select from '../ui/Select.jsx'
+import { productImagePlaceholder } from '../../config/images.js'
 import { formatRupiah } from '../../lib/format.js'
+
+const CASH_DENOMINATIONS = [2000, 5000, 10000, 20000, 50000, 100000]
+
+function denominationLabel(value) {
+  return value % 1000 === 0 ? `${value / 1000}rb` : String(value)
+}
 
 export default function CartPanel({
   cart,
   products,
-  discounts,
-  discountId,
-  onDiscountChange,
+  preview,
+  previewLoading,
+  previewError,
   amountPaid,
   onAmountChange,
   subtotal,
@@ -32,7 +39,16 @@ export default function CartPanel({
   className = '',
 }) {
   const paidAmount = Number(amountPaid) || 0
-  const isPayDisabled = cart.length === 0 || paidAmount < total || processing
+  const isPayDisabled =
+    cart.length === 0 || !preview || previewLoading || paidAmount < total || processing
+  const previewItems = preview?.items ?? []
+  const hasDiscount =
+    Boolean(preview) && preview.productDiscount + preview.transactionDiscount > 0
+
+  const findPreviewItem = (productId) =>
+    previewItems.find(
+      (entry) => String(entry.productId ?? entry.id) === productId,
+    )
 
   return (
     <div className={`flex min-h-0 flex-col ${className}`}>
@@ -70,9 +86,14 @@ export default function CartPanel({
         ) : (
           <ul className="space-y-3">
             {cart.map((item) => {
-              const stock =
-                products.find((product) => product.id === item.productId)?.stock ??
-                item.qty
+              const product = products.find(
+                (entry) => entry.id === item.productId,
+              )
+              const stock = product?.stock ?? item.qty
+              const pricedItem = findPreviewItem(item.productId)
+              const originalLineTotal = item.price * item.qty
+              const lineTotal = pricedItem?.subtotal ?? originalLineTotal
+              const lineDiscount = pricedItem?.discount ?? 0
 
               return (
                 <li
@@ -80,13 +101,24 @@ export default function CartPanel({
                   className="rounded-xl border border-pink-mist bg-surface p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink">
-                        {item.name}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-ink-muted">
-                        {formatRupiah(item.price)} / item
-                      </p>
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <img
+                        src={product?.image || productImagePlaceholder}
+                        alt={`Gambar ${item.name}`}
+                        loading="lazy"
+                        onError={(event) => {
+                          event.currentTarget.src = productImagePlaceholder
+                        }}
+                        className="size-9 shrink-0 rounded-lg border border-pink-mist bg-pink-light/40 object-cover"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-ink">
+                          {item.name}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-ink-muted">
+                          {formatRupiah(item.price)} / item
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -131,9 +163,16 @@ export default function CartPanel({
                         <Plus className="size-3.5" />
                       </button>
                     </div>
-                    <p className="text-sm font-bold text-ink">
-                      {formatRupiah(item.price * item.qty)}
-                    </p>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-ink">
+                        {formatRupiah(lineTotal)}
+                      </p>
+                      {lineDiscount > 0 && (
+                        <p className="mt-0.5 text-[10px] font-semibold text-pink-dark">
+                          Hemat {formatRupiah(lineDiscount)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </li>
               )
@@ -143,25 +182,95 @@ export default function CartPanel({
       </div>
 
       <div className="shrink-0 space-y-4 border-t border-pink-mist bg-cream/40 px-5 py-4">
-        <div className="space-y-1.5">
-          <label htmlFor="discount" className="block text-xs font-semibold text-ink">
-            Diskon (opsional)
-          </label>
-          <Select
-            id="discount"
-            size="sm"
-            className="w-full"
-            value={discountId}
-            onChange={(event) => onDiscountChange(event.target.value)}
+        {previewLoading && (
+          <p className="flex items-center gap-2 text-xs text-ink-muted">
+            <LoaderCircle className="size-3.5 animate-spin" />
+            Menghitung diskon dan total dari server...
+          </p>
+        )}
+
+        {previewError && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 px-3 py-2.5 text-xs font-medium text-error"
           >
-            <option value="">Tanpa diskon</option>
-            {discounts.map((discount) => (
-              <option key={discount.id} value={discount.id}>
-                {discount.label}
-              </option>
-            ))}
-          </Select>
-        </div>
+            <AlertCircle className="mt-px size-3.5 shrink-0" />
+            <div>
+              <p>{previewError}</p>
+              <p className="mt-0.5 font-normal text-ink-muted">
+                Keranjang tetap disimpan. Ubah jumlah produk untuk menghitung ulang.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {preview && (
+          <div
+            className={[
+              'rounded-xl border p-3',
+              hasDiscount
+                ? 'border-pink-primary/35 bg-pink-light/50'
+                : 'border-pink-mist bg-surface/70',
+            ].join(' ')}
+          >
+            <div className="flex items-start gap-2.5">
+              <span
+                className={[
+                  'flex size-8 shrink-0 items-center justify-center rounded-lg',
+                  hasDiscount
+                    ? 'bg-pink-dark text-white'
+                    : 'bg-pink-light text-pink-dark',
+                ].join(' ')}
+              >
+                <BadgePercent className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-pink-dark">
+                  {hasDiscount ? 'Diskon otomatis aktif' : 'Belum ada diskon aktif'}
+                </p>
+                <p className="mt-0.5 text-[10px] text-ink-muted">
+                  {hasDiscount
+                    ? 'Sudah dihitung pada total di bawah.'
+                    : 'Total belum mendapat potongan.'}
+                </p>
+              </div>
+              {hasDiscount && (
+                <strong className="shrink-0 text-sm font-bold text-pink-dark">
+                  -{formatRupiah(discountAmount)}
+                </strong>
+              )}
+            </div>
+
+            {hasDiscount && (
+              <div className="mt-2.5 space-y-1 border-t border-pink-primary/20 pt-2 text-[11px]">
+                {preview.productDiscount > 0 && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-ink-muted">Diskon produk</span>
+                    <span className="font-semibold text-ink">
+                      -{formatRupiah(preview.productDiscount)}
+                    </span>
+                  </div>
+                )}
+                {preview.transactionDiscount > 0 && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-ink-muted">Diskon transaksi</span>
+                    <span className="font-semibold text-ink">
+                      -{formatRupiah(preview.transactionDiscount)}
+                    </span>
+                  </div>
+                )}
+                {preview.discount?.name && (
+                  <p className="pt-0.5 text-[10px] text-ink-muted">
+                    Promo:{' '}
+                    <span className="font-semibold text-ink">
+                      {preview.discount.name}
+                    </span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <dl className="space-y-1.5 text-sm">
           <div className="flex items-center justify-between">
@@ -170,7 +279,7 @@ export default function CartPanel({
           </div>
           {discountAmount > 0 && (
             <div className="flex items-center justify-between">
-              <dt className="text-ink-muted">Diskon</dt>
+              <dt className="text-ink-muted">Total diskon</dt>
               <dd className="font-medium text-pink-dark">
                 -{formatRupiah(discountAmount)}
               </dd>
@@ -212,6 +321,38 @@ export default function CartPanel({
               {paymentError}
             </p>
           )}
+
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-ink-muted">
+              Pecahan uang
+            </span>
+            <button
+              type="button"
+              onClick={() => onAmountChange('')}
+              disabled={!amountPaid || processing}
+              className="text-[11px] font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
+            >
+              Atur ulang
+            </button>
+          </div>
+          <div className="grid grid-cols-6 gap-1.5">
+            {CASH_DENOMINATIONS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onAmountChange(String(paidAmount + value))}
+                disabled={processing}
+                title={`Tambah ${formatRupiah(value)}`}
+                aria-label={`Tambah ${formatRupiah(value)} ke uang diterima`}
+                className="h-8 rounded-lg border border-pink-mist bg-surface text-[11px] font-semibold text-ink transition hover:border-pink-primary hover:bg-pink-light hover:text-pink-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-pink-mist disabled:hover:bg-surface disabled:hover:text-ink"
+              >
+                {denominationLabel(value)}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-ink-muted">
+            Klik pecahan untuk menambah uang diterima.
+          </p>
         </div>
 
         <div className="flex items-center justify-between text-sm">
@@ -239,6 +380,11 @@ export default function CartPanel({
             <>
               <LoaderCircle className="size-4 animate-spin" />
               Memproses...
+            </>
+          ) : previewLoading ? (
+            <>
+              <LoaderCircle className="size-4 animate-spin" />
+              Menghitung total...
             </>
           ) : (
             <>

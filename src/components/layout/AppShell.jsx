@@ -82,9 +82,6 @@ export default function AppShell({
             <p className="truncate text-sm font-bold leading-tight tracking-tight">
               {activeItem.label}
             </p>
-            <p className="truncate text-[11px] text-ink-muted">
-              Outlet Sudirman
-            </p>
           </div>
 
           <span className="ml-auto hidden rounded-full bg-pink-light px-3 py-1 text-xs font-semibold text-pink-dark sm:inline">

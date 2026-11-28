@@ -14,7 +14,7 @@ import ProductMutationList from '../components/products/ProductMutationList.jsx'
 import StockAdjustmentModal from '../components/products/StockAdjustmentModal.jsx'
 import { useToast } from '../components/ui/toast-context.js'
 import { useCart } from '../context/cart-context.js'
-import { productImagePlaceholder } from '../data/mockKasir.js'
+import { productImagePlaceholder } from '../config/images.js'
 import { formatDateTime, formatRupiah } from '../lib/format.js'
 import {
   adjustStock,

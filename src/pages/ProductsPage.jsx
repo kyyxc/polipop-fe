@@ -18,7 +18,7 @@ import {
 import Select from '../components/ui/Select.jsx'
 import { useToast } from '../components/ui/toast-context.js'
 import { useCart } from '../context/cart-context.js'
-import { productImagePlaceholder } from '../data/mockKasir.js'
+import { productImagePlaceholder } from '../config/images.js'
 import { buildHash, readQueryParams } from '../lib/hashQuery.js'
 import { downloadProductsExcel, downloadProductsPdf } from '../lib/productExport.js'
 import {

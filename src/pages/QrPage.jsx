@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useCart } from '../context/cart-context.js'
 import { useToast } from '../components/ui/toast-context.js'
-import { demoQrPayloads, resolveProductFromQr } from '../lib/qrProduct.js'
+import { resolveProductFromQr, sampleQrPayloads } from '../lib/qrProduct.js'
 import { formatRupiah } from '../lib/format.js'
 
 const SCAN_COOLDOWN_MS = 1500
@@ -76,7 +76,7 @@ export default function QrPage({ onNavigate }) {
 
       const product = resolveProductFromQr(value, visibleProducts)
       if (!product) {
-        const message = 'Kode QR tidak dikenali dalam katalog demo.'
+        const message = 'Kode QR tidak dikenali dalam katalog produk.'
         pushHistory({ payload: value, source, ok: false, message })
         setStats((current) => ({ ...current, failed: current.failed + 1 }))
         showToast('error', message)
@@ -161,7 +161,7 @@ export default function QrPage({ onNavigate }) {
 
   useEffect(() => () => stopScanner(), [stopScanner])
 
-  const demoCodes = demoQrPayloads(visibleProducts)
+  const sampleCodes = sampleQrPayloads(visibleProducts)
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0)
   const totalQty = cart.reduce((sum, item) => sum + item.qty, 0)
 
@@ -178,8 +178,8 @@ export default function QrPage({ onNavigate }) {
             </h1>
           </div>
           <p className="mt-2 max-w-2xl text-sm text-ink-muted">
-            Halaman demo untuk menguji alat deteksi QR. Setiap kode yang terbaca
-            langsung menambah produk ke keranjang Kasir. Belum terhubung ke API.
+            Pindai QR produk untuk menambahkannya ke keranjang Kasir. Kode contoh
+            disediakan jika ingin mencoba tanpa mencetak QR fisik.
           </p>
         </div>
         <button
@@ -311,11 +311,11 @@ export default function QrPage({ onNavigate }) {
               </div>
               {loading ? (
                 <p className="mt-3 text-xs text-ink-muted">
-                  Memuat katalog produk demo...
+                  Memuat katalog produk...
                 </p>
               ) : (
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {demoCodes.map(({ product, payload }) => (
+                  {sampleCodes.map(({ product, payload }) => (
                     <button
                       key={product.id}
                       type="button"
@@ -468,8 +468,8 @@ export default function QrPage({ onNavigate }) {
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-pink-mist bg-pink-light/50 px-3 py-3 text-[11px] leading-relaxed text-ink-muted">
             <Info className="mt-0.5 size-3.5 shrink-0 text-pink-dark" />
             <p>
-              Mode demo: produk, stok, dan keranjang memakai data lokal. Belum
-              ada validasi atau penyimpanan ke backend.
+              Produk dan stok berasal dari API. Kode contoh di atas hanya untuk
+              mencoba pemindaian; pembayaran tetap diproses di menu Kasir.
             </p>
           </div>
         </aside>

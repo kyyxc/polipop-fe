@@ -7,8 +7,9 @@ import {
 } from 'lucide-react'
 import Pagination from '../components/categories/Pagination.jsx'
 import StockHistoryList from '../components/stock/StockHistoryList.jsx'
+import DateInput from '../components/ui/DateInput.jsx'
 import Select from '../components/ui/Select.jsx'
-import { subscribeProducts, getStockHistory } from '../lib/productService.js'
+import { getStockHistory } from '../lib/productService.js'
 import { buildHash, readQueryParams } from '../lib/hashQuery.js'
 
 const PAGE_PATH = '/stock/history'
@@ -77,7 +78,7 @@ export default function StockHistoryPage({ onNavigate }) {
     if (window.location.hash !== nextHash) window.location.hash = nextHash
   }, [filters])
 
-  useEffect(() => subscribeProducts(() => setReloadKey((key) => key + 1)), [])
+
 
   const requestKey = [
     filters.q,
@@ -203,13 +204,12 @@ export default function StockHistoryPage({ onNavigate }) {
           >
             Tanggal mulai
           </label>
-          <input
+          <DateInput
             id="stock-from"
-            type="date"
+            className="mt-1.5 w-full"
             value={filters.from}
             max={filters.to || undefined}
             onChange={(event) => applyDateFilter('from', event.target.value)}
-            className="mt-1.5 h-11 w-full rounded-xl border border-pink-mist bg-surface px-3 text-sm text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
           />
         </div>
 
@@ -220,13 +220,12 @@ export default function StockHistoryPage({ onNavigate }) {
           >
             Tanggal akhir
           </label>
-          <input
+          <DateInput
             id="stock-to"
-            type="date"
+            className="mt-1.5 w-full"
             value={filters.to}
             min={filters.from || undefined}
             onChange={(event) => applyDateFilter('to', event.target.value)}
-            className="mt-1.5 h-11 w-full rounded-xl border border-pink-mist bg-surface px-3 text-sm text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
           />
         </div>
 

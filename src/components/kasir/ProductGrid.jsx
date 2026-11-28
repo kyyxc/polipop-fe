@@ -1,10 +1,11 @@
 import { AlertCircle, Package, RefreshCw, Search } from 'lucide-react'
+import { productImagePlaceholder } from '../../config/images.js'
 import { formatRupiah } from '../../lib/format.js'
 
 function ProductSkeleton() {
   return (
-    <div className="h-[148px] rounded-2xl border border-pink-mist bg-surface p-4">
-      <div className="size-10 animate-pulse rounded-xl bg-pink-light" />
+    <div className="h-[160px] rounded-2xl border border-pink-mist bg-surface p-4">
+      <div className="size-12 animate-pulse rounded-xl bg-pink-light" />
       <div className="mt-4 h-3 w-2/3 animate-pulse rounded bg-pink-light" />
       <div className="mt-3 h-4 w-1/2 animate-pulse rounded bg-pink-light" />
     </div>
@@ -88,7 +89,7 @@ export default function ProductGrid({
               Belum ada produk. Tambahkan produk terlebih dahulu.
             </p>
             <a
-              href="/products"
+              href="#/products"
               className="mt-4 inline-flex rounded-xl bg-pink-dark px-4 py-2 text-xs font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-pink-light"
             >
               Tambah produk
@@ -117,12 +118,18 @@ export default function ProductGrid({
                     type="button"
                     disabled={isSoldOut}
                     onClick={() => onAdd(product)}
-                    className="flex h-[148px] flex-col rounded-2xl border border-pink-mist bg-surface p-4 text-left transition hover:border-pink-primary hover:shadow-[0_12px_24px_-16px_rgba(194,96,122,0.6)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-pink-light disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-pink-mist disabled:hover:shadow-none"
+                    className="flex h-[160px] flex-col rounded-2xl border border-pink-mist bg-surface p-4 text-left transition hover:border-pink-primary hover:shadow-[0_12px_24px_-16px_rgba(194,96,122,0.6)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-pink-light disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-pink-mist disabled:hover:shadow-none"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="flex size-10 items-center justify-center rounded-xl bg-pink-light text-pink-dark">
-                        <Package className="size-5" />
-                      </span>
+                      <img
+                        src={product.image || productImagePlaceholder}
+                        alt={`Gambar ${product.name}`}
+                        loading="lazy"
+                        onError={(event) => {
+                          event.currentTarget.src = productImagePlaceholder
+                        }}
+                        className="size-12 shrink-0 rounded-xl border border-pink-mist bg-pink-light/40 object-cover"
+                      />
                       {isSoldOut ? (
                         <span className="rounded-full bg-error/10 px-2 py-1 text-[10px] font-bold text-error">
                           Habis

@@ -1,4 +1,9 @@
 import { Check, Moon, Sun } from 'lucide-react'
+import { APP_NAME, OUTLET_NAME } from '../config/app.js'
+import {
+  ADMIN_WHATSAPP_NUMBER,
+  HAS_ADMIN_WHATSAPP,
+} from '../config/contact.js'
 import { useTheme } from '../context/theme-context.js'
 
 const themeOptions = [
@@ -26,9 +31,47 @@ export default function SettingsPage() {
           Pengaturan
         </h1>
         <p className="mt-1 text-xs text-ink-muted sm:text-sm">
-          Sesuaikan tampilan aplikasi kasir sesuai kebutuhan Anda.
+          Lihat identitas aplikasi dan sesuaikan tampilan kasir sesuai kebutuhan Anda.
         </p>
       </div>
+
+      <section className="mt-6 rounded-3xl border border-pink-mist bg-surface p-5 shadow-[0_20px_50px_-30px_rgba(194,96,122,0.45)] sm:p-6">
+        <div>
+          <h2 className="text-base font-bold text-ink">Identitas aplikasi</h2>
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+            Nilai berikut dipakai pada struk dan tautan bantuan.
+          </p>
+        </div>
+
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-pink-mist bg-cream/40 px-3 py-2.5">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+              Nama aplikasi
+            </dt>
+            <dd className="mt-0.5 text-sm font-semibold text-ink">{APP_NAME}</dd>
+          </div>
+          <div className="rounded-xl border border-pink-mist bg-cream/40 px-3 py-2.5">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+              Nama outlet
+            </dt>
+            <dd className="mt-0.5 text-sm font-semibold text-ink">{OUTLET_NAME}</dd>
+          </div>
+          <div className="rounded-xl border border-pink-mist bg-cream/40 px-3 py-2.5 sm:col-span-2">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+              Kontak admin
+            </dt>
+            <dd className="mt-0.5 text-sm font-semibold text-ink">
+              {HAS_ADMIN_WHATSAPP ? ADMIN_WHATSAPP_NUMBER : 'Belum dikonfigurasi'}
+            </dd>
+          </div>
+        </dl>
+
+        <p className="mt-3 text-[11px] leading-relaxed text-ink-muted">
+          Backend belum menyediakan endpoint pengaturan warung. Ubah nilai lewat
+          variabel environment (`VITE_APP_NAME`, `VITE_OUTLET_NAME`,
+          `VITE_ADMIN_WHATSAPP`) saat build.
+        </p>
+      </section>
 
       <section className="mt-6 rounded-3xl border border-pink-mist bg-surface p-5 shadow-[0_20px_50px_-30px_rgba(194,96,122,0.45)] sm:p-6">
         <div>

@@ -1,12 +1,11 @@
-import { currentWarungId } from '../data/mockKasir.js'
-
-// Demo: menerjemahkan isi QR menjadi produk dari katalog lokal.
-// Format yang diterima (tanpa pemanggilan API):
-//   - "prod-01"                       -> id produk
-//   - "POLIPOP:prod-01"               -> id dengan prefix
-//   - "https://.../?productId=prod-01" -> query parameter
-//   - '{"productId":"prod-01"}'       -> payload JSON
-//   - "Kopi Susu Gula Aren"           -> nama produk (case-insensitive)
+// Menerjemahkan isi QR menjadi produk dari katalog Kasir (API). Backend belum
+// menyediakan endpoint resolve QR, jadi pencocokan dilakukan terhadap katalog.
+// Format yang diterima:
+//   - "<uuid-produk>"                  -> id produk
+//   - "POLIPOP:<uuid-produk>"          -> id dengan prefix
+//   - "https://.../?productId=<uuid>"  -> query parameter
+//   - '{"productId":"<uuid>"}'         -> payload JSON
+//   - barcode, nama produk, atau SKU    -> pencocokan teks (case-insensitive)
 
 function lookup(products, value) {
   const keyword = String(value ?? '').trim().toLocaleLowerCase('id-ID')
@@ -14,6 +13,9 @@ function lookup(products, value) {
 
   return (
     products.find((product) => product.id.toLocaleLowerCase() === keyword) ||
+    products.find((product) =>
+      String(product.barcode ?? '').toLocaleLowerCase('id-ID') === keyword,
+    ) ||
     products.find(
       (product) => product.name.toLocaleLowerCase('id-ID') === keyword,
     ) ||
@@ -25,9 +27,7 @@ export function resolveProductFromQr(rawValue, products = []) {
   const value = String(rawValue ?? '').trim()
   if (!value) return null
 
-  const available = products.filter(
-    (product) => product.active && product.warungId === currentWarungId,
-  )
+  const available = products.filter((product) => product.active !== false)
 
   try {
     const parsed = JSON.parse(value)
@@ -69,9 +69,9 @@ export function resolveProductFromQr(rawValue, products = []) {
   )
 }
 
-export function demoQrPayloads(products = []) {
+export function sampleQrPayloads(products = []) {
   return products
-    .filter((product) => product.active && product.warungId === currentWarungId)
+    .filter((product) => product.active !== false)
     .slice(0, 6)
     .map((product) => ({ product, payload: `POLIPOP:${product.id}` }))
 }

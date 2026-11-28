@@ -1,56 +1,105 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { currentWarungId } from '../data/mockKasir.js'
-import {
-  getAllProducts,
-  recordSaleStock,
-  subscribeProducts,
-} from '../lib/productService.js'
+import { getExportProducts } from '../lib/productService.js'
 import { CartContext } from './cart-context.js'
+
+const CART_STORAGE_KEY = 'polipop-cart'
+
+function readStoredCart() {
+  try {
+    const raw = sessionStorage.getItem(CART_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .filter(
+        (item) =>
+          item &&
+          typeof item.productId === 'string' &&
+          Number.isFinite(Number(item.price)) &&
+          Number.isInteger(Number(item.qty)) &&
+          Number(item.qty) > 0,
+      )
+      .map((item) => ({
+        productId: item.productId,
+        name: String(item.name ?? ''),
+        price: Math.max(0, Number(item.price)),
+        qty: Number(item.qty),
+        discount: Math.max(0, Number(item.discount) || 0),
+      }))
+  } catch {
+    return []
+  }
+}
 
 export function CartProvider({ children }) {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
-  const [cart, setCart] = useState([])
+  const [cart, setCart] = useState(readStoredCart)
   const [cartError, setCartError] = useState('')
 
-  // Simulasi GET produk: data lokal dari productService, tanpa backend. State
-  // produk dan keranjang sengaja global agar /QR bisa menambah barang ke Kasir,
-  // dan perubahan dari Products Page langsung terlihat di Kasir.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setProducts(getAllProducts())
-      setLoadError(null)
-      setLoading(false)
-    }, 600)
-    const unsubscribe = subscribeProducts(() => setProducts(getAllProducts()))
+    try {
+      sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart))
+    } catch {
+      // Keranjang tetap dipakai dalam sesi ini bila storage tidak tersedia.
+    }
+  }, [cart])
+
+  // Kasir dan QR memakai produk dari API yang sama dengan halaman Produk.
+  // Stok di server menjadi sumber kebenaran; transaksi yang berhasil dibuat
+  // memicu reload agar kartu produk menampilkan stok terbaru.
+  useEffect(() => {
+    let active = true
+
+    async function loadProducts() {
+      setLoading(true)
+      try {
+        const rows = await getExportProducts()
+        if (!active) return
+        setProducts(rows)
+        setLoadError(null)
+        // Keranjang yang dipulihkan bisa berisi produk yang sudah dihapus atau
+        // stoknya berubah. Buang item tersebut setelah katalog API dimuat.
+        setCart((current) => {
+          const valid = current.filter((item) =>
+            rows.some(
+              (product) =>
+                product.id === item.productId && product.stock >= item.qty,
+            ),
+          )
+          return valid.length === current.length ? current : valid
+        })
+      } catch (err) {
+        if (active) setLoadError(err.message || 'Gagal memuat produk.')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadProducts()
     return () => {
-      clearTimeout(timer)
-      unsubscribe()
+      active = false
     }
   }, [reloadKey])
 
   const visibleProducts = useMemo(
-    () =>
-      products.filter(
-        (product) => product.active && product.warungId === currentWarungId,
-      ),
+    () => products.filter((product) => product.active !== false),
     [products],
   )
 
   const reload = useCallback(() => {
-    setLoading(true)
     setReloadKey((key) => key + 1)
   }, [])
 
   const addToCart = useCallback(
     (product) => {
       if (!product) return { ok: false, reason: 'Produk tidak ditemukan.' }
-      if (!product.active || product.warungId !== currentWarungId) {
-        return { ok: false, reason: 'Produk tidak tersedia untuk warung ini.' }
+      if (product.active === false) {
+        return { ok: false, reason: 'Produk tidak tersedia.' }
       }
-      if (product.stock === 0) {
+      if (product.stock <= 0) {
         return { ok: false, reason: 'Stok produk habis.' }
       }
 
@@ -123,11 +172,6 @@ export function CartProvider({ children }) {
     setCartError('')
   }, [])
 
-  const decrementStock = useCallback((paidItems, transaction = null) => {
-    // Stok dan riwayat mutasi ditulis sekaligus oleh productService.
-    setProducts(recordSaleStock(paidItems, transaction))
-  }, [])
-
   const value = useMemo(
     () => ({
       products,
@@ -142,7 +186,6 @@ export function CartProvider({ children }) {
       setQty,
       removeItem,
       clearCart,
-      decrementStock,
     }),
     [
       products,
@@ -156,7 +199,6 @@ export function CartProvider({ children }) {
       setQty,
       removeItem,
       clearCart,
-      decrementStock,
     ],
   )
 

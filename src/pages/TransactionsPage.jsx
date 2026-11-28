@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   DropdownMenuItem,
 } from '../components/ui/DropdownMenu.jsx'
+import DateInput from '../components/ui/DateInput.jsx'
 import Select from '../components/ui/Select.jsx'
 import { buildHash, readQueryParams } from '../lib/hashQuery.js'
 import {
@@ -26,6 +27,14 @@ import {
 
 const PAGE_PATH = '/transactions'
 const PER_PAGE_OPTIONS = [10, 25, 50]
+
+const EMPTY_RESULT = {
+  items: [],
+  total: 0,
+  page: 1,
+  perPage: 10,
+  totalPages: 1,
+}
 
 function initialFilters() {
   const params = readQueryParams()
@@ -77,12 +86,18 @@ export default function TransactionsPage({ onNavigate }) {
   const [datePanelOpen, setDatePanelOpen] = useState(false)
   const [exporting, setExporting] = useState(null)
   const [exportError, setExportError] = useState('')
-  const [transactions, setTransactions] = useState([])
+  const [result, setResult] = useState(EMPTY_RESULT)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
 
   const filtersRef = useRef(filters)
+  const totalPages = Math.max(1, result.totalPages)
+  const currentPage = Math.min(filters.page, totalPages)
+  const requestFilters = useMemo(
+    () => ({ ...filters, page: currentPage }),
+    [filters, currentPage],
+  )
 
   useEffect(() => {
     filtersRef.current = filters
@@ -106,7 +121,7 @@ export default function TransactionsPage({ onNavigate }) {
     if (filters.q) params.set('q', filters.q)
     if (filters.from) params.set('from', filters.from)
     if (filters.to) params.set('to', filters.to)
-    if (filters.page !== 1) params.set('page', String(filters.page))
+    if (currentPage !== 1) params.set('page', String(currentPage))
     if (filters.perPage !== 10) params.set('perPage', String(filters.perPage))
 
     const nextHash = buildHash(PAGE_PATH, params)
@@ -118,9 +133,7 @@ export default function TransactionsPage({ onNavigate }) {
     } catch {
       // sessionStorage tidak tersedia: kembali ke daftar tanpa filter.
     }
-  }, [filters])
-
-  const requestKey = `${filters.q}\u0000${filters.from}\u0000${filters.to}\u0000${reloadKey}`
+  }, [filters, currentPage])
 
   useEffect(() => {
     let active = true
@@ -128,8 +141,8 @@ export default function TransactionsPage({ onNavigate }) {
       setLoading(true)
       setError(null)
       try {
-        const data = await getTransactions(filtersRef.current)
-        if (active) setTransactions(data)
+        const data = await getTransactions(requestFilters)
+        if (active) setResult(data)
       } catch (err) {
         if (active) setError(err.message || 'Gagal memuat daftar transaksi.')
       } finally {
@@ -141,18 +154,9 @@ export default function TransactionsPage({ onNavigate }) {
       active = false
       clearTimeout(timer)
     }
-  }, [requestKey])
+  }, [requestFilters, reloadKey])
 
-  const totalPages = Math.max(1, Math.ceil(transactions.length / filters.perPage))
-  const currentPage = Math.min(filters.page, totalPages)
-  const pageTransactions = useMemo(
-    () =>
-      transactions.slice(
-        (currentPage - 1) * filters.perPage,
-        currentPage * filters.perPage,
-      ),
-    [transactions, currentPage, filters.perPage],
-  )
+  const transactions = result.items
   const hasFilters = Boolean(filters.q || filters.from || filters.to)
 
   const applyDateFilter = (field, value) => {
@@ -272,6 +276,7 @@ export default function TransactionsPage({ onNavigate }) {
               <input
                 id="transaction-search"
                 type="search"
+                maxLength={50}
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 placeholder="Contoh: TRX-20261123-001"
@@ -302,13 +307,12 @@ export default function TransactionsPage({ onNavigate }) {
               >
                 Tanggal mulai
               </label>
-              <input
+              <DateInput
                 id="transaction-from"
-                type="date"
+                className="mt-1.5 w-full"
                 value={filters.from}
                 max={filters.to || undefined}
                 onChange={(event) => applyDateFilter('from', event.target.value)}
-                className="mt-1.5 h-11 w-full rounded-xl border border-pink-mist bg-surface px-3 text-sm text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
               />
             </div>
             <div>
@@ -318,13 +322,12 @@ export default function TransactionsPage({ onNavigate }) {
               >
                 Tanggal akhir
               </label>
-              <input
+              <DateInput
                 id="transaction-to"
-                type="date"
+                className="mt-1.5 w-full"
                 value={filters.to}
                 min={filters.from || undefined}
                 onChange={(event) => applyDateFilter('to', event.target.value)}
-                className="mt-1.5 h-11 w-full rounded-xl border border-pink-mist bg-surface px-3 text-sm text-ink outline-none transition focus:border-pink-primary focus:ring-4 focus:ring-pink-light/70"
               />
             </div>
           </div>
@@ -367,7 +370,7 @@ export default function TransactionsPage({ onNavigate }) {
       <p aria-live="polite" className="sr-only">
         {loading
           ? 'Memuat daftar transaksi'
-          : `${transactions.length} transaksi ditemukan`}
+          : `${result.total} transaksi ditemukan`}
       </p>
 
       <section
@@ -375,7 +378,7 @@ export default function TransactionsPage({ onNavigate }) {
         className="mt-5 overflow-hidden rounded-2xl border border-pink-mist bg-surface shadow-[0_20px_50px_-38px_rgba(194,96,122,0.55)]"
       >
         <TransactionTable
-          transactions={pageTransactions}
+          transactions={transactions}
           loading={loading}
           error={error}
           page={currentPage}
@@ -389,7 +392,7 @@ export default function TransactionsPage({ onNavigate }) {
       <Pagination
         page={currentPage}
         totalPages={totalPages}
-        total={transactions.length}
+        total={result.total}
         pageSize={filters.perPage}
         onChange={(page) => setFilters((current) => ({ ...current, page }))}
         noun="transaksi"

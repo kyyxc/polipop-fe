@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { CheckCircle2, Printer, X } from 'lucide-react'
+import { OUTLET_NAME } from '../../config/app.js'
 import { formatRupiah } from '../../lib/format.js'
 
 export default function SuccessDialog({ transaction, onClose }) {
@@ -46,7 +47,27 @@ export default function SuccessDialog({ transaction, onClose }) {
             </div>
 
             <dl className="mt-5 space-y-2 rounded-2xl border border-pink-mist bg-cream/60 p-4 text-sm">
-              <div className="flex justify-between">
+              {(transaction.productDiscount > 0 ||
+                transaction.discountAmount > 0) && (
+                <div className="flex justify-between">
+                  <dt className="text-ink-muted">Total diskon</dt>
+                  <dd className="font-semibold text-pink-dark">
+                    -{formatRupiah(
+                      (transaction.productDiscount ?? 0) +
+                        (transaction.discountAmount ?? 0),
+                    )}
+                  </dd>
+                </div>
+              )}
+              {transaction.discount?.name && (
+                <div className="flex justify-between">
+                  <dt className="text-ink-muted">Promo</dt>
+                  <dd className="font-medium text-ink">
+                    {transaction.discount.name}
+                  </dd>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-pink-mist pt-2">
                 <dt className="text-ink-muted">Total</dt>
                 <dd className="font-bold text-ink">{formatRupiah(transaction.total)}</dd>
               </div>
@@ -88,7 +109,7 @@ export default function SuccessDialog({ transaction, onClose }) {
       {transaction && (
         <section className="print-receipt" aria-hidden="true">
           <h1>Polipop Kasir</h1>
-          <p>Outlet Sudirman</p>
+          <p>{OUTLET_NAME}</p>
           <p>No. transaksi: {transaction.no}</p>
           <p>
             Tanggal:{' '}
@@ -96,11 +117,16 @@ export default function SuccessDialog({ transaction, onClose }) {
           </p>
           <hr />
           {transaction.items.map((item) => (
-            <div key={item.productId}>
+            <div key={item.productId || item.id}>
               <span>
                 {item.name} x {item.qty}
+                {item.discount > 0
+                  ? ` (diskon -${formatRupiah(item.discount)})`
+                  : ''}
               </span>
-              <span>{formatRupiah(item.price * item.qty)}</span>
+              <span>
+                {formatRupiah(item.subtotal ?? item.price * item.qty)}
+              </span>
             </div>
           ))}
           <hr />
@@ -109,9 +135,19 @@ export default function SuccessDialog({ transaction, onClose }) {
             <span>{formatRupiah(transaction.subtotal)}</span>
           </div>
           <div>
-            <span>Diskon</span>
-            <span>-{formatRupiah(transaction.discountAmount)}</span>
+            <span>Diskon produk</span>
+            <span>-{formatRupiah(transaction.productDiscount ?? 0)}</span>
           </div>
+          <div>
+            <span>Diskon transaksi</span>
+            <span>-{formatRupiah(transaction.discountAmount ?? 0)}</span>
+          </div>
+          {transaction.discount?.name && (
+            <div>
+              <span>Diskon diterapkan</span>
+              <span>{transaction.discount.name}</span>
+            </div>
+          )}
           <div>
             <strong>Total</strong>
             <strong>{formatRupiah(transaction.total)}</strong>

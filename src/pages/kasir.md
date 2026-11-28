@@ -79,8 +79,8 @@ Halaman utama untuk mencatat transaksi penjualan: memilih produk, menyusun keran
 | Product card | Nama, harga, sisa stok; klik untuk menambah ke keranjang | Yes | Card |
 | Cart item | Nama produk, kontrol qty, subtotal | Yes | List item |
 | Qty control | Tombol −/+ dan input jumlah | Yes | Input |
-| Diskon selector | Memilih satu diskon aktif untuk transaksi | No | Select |
-| Ringkasan total | Subtotal, diskon, total | Yes | Summary |
+| Diskon otomatis | Menampilkan diskon produk/transaksi yang dipilih server | No | Summary |
+| Ringkasan total | Subtotal, diskon, total hasil preview server | Yes | Summary |
 | Uang diterima | Input nominal uang dari pembeli | Yes | Input |
 | Kembalian | Hasil hitung otomatis, read-only | Yes | Text |
 | Tombol Bayar | Menyimpan transaksi | Yes | Button |
@@ -110,14 +110,14 @@ Halaman utama untuk mencatat transaksi penjualan: memilih produk, menyusun keran
 2. Qty maksimal sebesar stok tersedia.
 3. Total dihitung ulang.
 
-### Memilih Diskon
+### Menghitung Diskon
 
-**Trigger:** Memilih diskon dari selector.
+**Trigger:** Keranjang berubah (item ditambah, qty diubah, atau item dihapus).
 
 **Expected behavior:**
-1. Hanya diskon aktif yang muncul.
-2. Total dihitung ulang setelah diskon diterapkan.
-3. Diskon bisa dikosongkan kembali.
+1. Frontend memanggil `POST /transactions/preview` untuk menghitung ulang diskon dan total.
+2. Ringkasan menampilkan diskon produk dan diskon transaksi yang dipilih server.
+3. Tombol Bayar hanya aktif setelah preview berhasil.
 
 ### Membayar
 
@@ -172,7 +172,7 @@ Halaman utama untuk mencatat transaksi penjualan: memilih produk, menyusun keran
 | Keranjang | Minimal 1 item | Keranjang masih kosong |
 | Qty | 1 ≤ qty ≤ stok tersedia | Jumlah melebihi stok tersedia |
 | Uang diterima | ≥ total | Uang diterima kurang dari total |
-| Diskon | Opsional, satu per transaksi | — |
+| Diskon | Dipilih otomatis oleh server dari diskon aktif; tidak dikirim dari frontend | — |
 
 ### Business Rules
 
@@ -186,20 +186,21 @@ Halaman utama untuk mencatat transaksi penjualan: memilih produk, menyusun keran
 
 | Action | Method | Endpoint | Notes |
 |---|---|---|---|
-| Muat produk | GET | `/` | Render grid produk aktif |
-| Cari produk | GET | `/?q=<kata>` | Filter berdasarkan nama |
-| Simpan transaksi | POST | `/` | Form POST, CSRF token wajib |
+| Muat produk | GET | `/products` | Grid Kasir/QR memakai API produk yang sama dengan halaman Produk |
+| Hitung total | POST | `/transactions/preview` | Diskon dan total dihitung server tanpa menyimpan transaksi |
+| Simpan transaksi | POST | `/transactions` | JSON body; stok dan mutasi dibuat server |
+| Muat ulang stok | GET | `/products` | Dipanggil setelah transaksi berhasil |
 
 ### Request Data
 
-- Item transaksi: `product_id`, `qty`.
-- `discount_id` (opsional).
-- `amount_paid`.
+- Item transaksi: `product_id`, `quantity`.
+- `cash_received`.
+- `discount_id` tidak dikirim; server memilih diskon aktif terbaik.
 
 ### Response Data
 
-- Halaman yang sama dengan dialog sukses dan ringkasan transaksi.
-- Error validasi dikembalikan di context template.
+- `transaction_number`, ringkasan item, subtotal, diskon, total, uang diterima, dan kembalian.
+- Detail transaksi tersedia di `GET /transactions/{id}`.
 
 ### Error Handling
 
@@ -208,8 +209,8 @@ Halaman utama untuk mencatat transaksi penjualan: memilih produk, menyusun keran
 
 ### Data Dependencies
 
-- Produk aktif + stok warung.
-- Daftar diskon aktif.
+- Produk aktif + stok dari API (server yang menurunkan stok setelah penjualan).
+- Diskon aktif milik user yang login (dipilih server saat preview dan create).
 
 ## 9. Accessibility
 

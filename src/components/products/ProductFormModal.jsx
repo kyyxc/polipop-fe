@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { AlertCircle, ImagePlus, LoaderCircle, Trash2, X } from 'lucide-react'
-import { productImagePlaceholder } from '../../data/mockKasir.js'
+import { productImagePlaceholder } from '../../config/images.js'
 import {
   readFileAsDataUrl,
   validateImageFile,

@@ -1,4 +1,4 @@
-// Label & warna tipe mutasi dari backend, plus tipe lama dari data lokal.
+// Label & warna untuk tipe mutasi yang dikirim backend.
 export const TYPE_META = {
   initial: {
     label: 'Stok awal',

@@ -1,5 +1,6 @@
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 const USER_STORAGE_KEY = 'polipop-user'
+const REMEMBER_STORAGE_KEY = 'polipop-remember'
 
 const EDITABLE_FIELDS = [
   'username',
@@ -114,17 +115,39 @@ export function saveUser(user) {
   return user
 }
 
+function getRememberPreference() {
+  try {
+    return localStorage.getItem(REMEMBER_STORAGE_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+function setRememberPreference(rememberMe) {
+  try {
+    localStorage.setItem(REMEMBER_STORAGE_KEY, String(Boolean(rememberMe)))
+  } catch {
+    // Preferensi tidak tersedia: sesi tetap dikendalikan cookie backend.
+  }
+}
+
+function cacheUser(user) {
+  return getRememberPreference() ? saveUser(user) : user
+}
+
 export async function login({ username, password, rememberMe = false }) {
   const payload = await request('/users/login', {
     method: 'POST',
     body: { username, password, remember_me: rememberMe },
   })
-  return saveUser(extractUser(payload))
+  const user = extractUser(payload)
+  setRememberPreference(rememberMe)
+  return cacheUser(rememberMe ? user : null)
 }
 
 export async function getCurrentUser() {
   const payload = await request('/users/me')
-  return saveUser(extractUser(payload))
+  return cacheUser(extractUser(payload))
 }
 
 export async function logout() {
@@ -147,5 +170,5 @@ export async function updateProfile({
   if (newPassword) body.new_password = newPassword
 
   const payload = await request('/users/me', { method: 'PATCH', body })
-  return saveUser(extractUser(payload))
+  return cacheUser(extractUser(payload))
 }

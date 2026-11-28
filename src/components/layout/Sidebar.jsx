@@ -67,9 +67,8 @@ function NavItem({ item, active, compact, onNavigate }) {
   )
 }
 
-function getUserInitials(user) {
-  const name = user?.full_name?.trim() || user?.username?.trim() || 'Kasir'
-  const parts = name.split(/\s+/).filter(Boolean)
+function getUserInitials(displayName) {
+  const parts = String(displayName || 'Kasir').split(/\s+/).filter(Boolean)
 
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
@@ -86,8 +85,10 @@ export default function Sidebar({
   loggingOut = false,
   user,
 }) {
-  const displayName = user?.full_name?.trim() || user?.username?.trim() || 'Kasir'
+  const fullName = user?.full_name?.trim()
   const username = user?.username?.trim()
+  const displayName = fullName && !/admin/i.test(fullName) ? fullName : 'Kasir'
+  const displayUsername = username && !/admin/i.test(username) ? username : 'kasir'
 
   return (
     <>
@@ -185,7 +186,7 @@ export default function Sidebar({
               title={displayName}
               className="flex size-9 shrink-0 items-center justify-center rounded-full bg-pink-dark text-xs font-bold text-white"
             >
-              {getUserInitials(user)}
+              {getUserInitials(displayName)}
             </span>
             <div
               className={['min-w-0 flex-1', collapsed ? 'lg:hidden' : ''].join(
@@ -196,7 +197,7 @@ export default function Sidebar({
                 {displayName}
               </p>
               <p className="truncate text-[10px] text-ink-muted">
-                {username ? `@${username}` : 'Akun kasir'}
+                {displayUsername ? `@${displayUsername}` : 'Akun kasir'}
               </p>
             </div>
           </div>

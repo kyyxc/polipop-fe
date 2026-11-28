@@ -4,12 +4,10 @@ import CartPanel from '../components/kasir/CartPanel.jsx'
 import ProductGrid from '../components/kasir/ProductGrid.jsx'
 import SuccessDialog from '../components/kasir/SuccessDialog.jsx'
 import { useCart } from '../context/cart-context.js'
-import { currentUserId } from '../data/mockCategories.js'
-import { currentWarungId, mockDiscounts } from '../data/mockKasir.js'
 import { formatRupiah } from '../lib/format.js'
 import {
-  createTransactionNo,
-  saveTransaction,
+  createTransaction,
+  previewTransaction,
 } from '../lib/transactionService.js'
 
 export default function KasirPage() {
@@ -25,20 +23,23 @@ export default function KasirPage() {
     setQty,
     removeItem,
     clearCart,
-    decrementStock,
   } = useCart()
 
   const [search, setSearch] = useState('')
-  const [discountId, setDiscountId] = useState('')
   const [amountPaid, setAmountPaid] = useState('')
   const [paymentTouched, setPaymentTouched] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [processing, setProcessing] = useState(false)
   const [success, setSuccess] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-  const submitTimer = useRef(null)
+  const [previewState, setPreviewState] = useState({
+    signature: '',
+    data: null,
+    error: '',
+    loading: false,
+  })
 
-  useEffect(() => () => clearTimeout(submitTimer.current), [])
+  const previewRequestRef = useRef(0)
 
   useEffect(() => {
     if (!sheetOpen) return undefined
@@ -48,11 +49,6 @@ export default function KasirPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [sheetOpen])
-
-  const discounts = useMemo(
-    () => mockDiscounts.filter((discount) => discount.active),
-    [],
-  )
 
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -67,15 +63,69 @@ export default function KasirPage() {
     [cart],
   )
 
-  const selectedDiscount = discounts.find((discount) => discount.id === discountId)
-  const discountAmount = selectedDiscount
-    ? Math.min(selectedDiscount.amount, subtotal)
+  const cartSignature = useMemo(
+    () => cart.map((item) => `${item.productId}:${item.qty}`).join('|'),
+    [cart],
+  )
+
+  // Diskon dipilih otomatis oleh server. Preview dipakai agar total yang
+  // ditampilkan dan menjadi syarat pembayaran sama dengan perhitungan backend.
+  useEffect(() => {
+    if (cart.length === 0) return undefined
+
+    let active = true
+    const requestId = ++previewRequestRef.current
+
+    const timer = setTimeout(async () => {
+      if (!active || requestId !== previewRequestRef.current) return
+      setPreviewState({ signature: cartSignature, data: null, error: '', loading: true })
+
+      try {
+        const result = await previewTransaction(cart)
+        if (active && requestId === previewRequestRef.current) {
+          setPreviewState({
+            signature: cartSignature,
+            data: result,
+            error: '',
+            loading: false,
+          })
+        }
+      } catch (err) {
+        if (active && requestId === previewRequestRef.current) {
+          setPreviewState({
+            signature: cartSignature,
+            data: null,
+            error: err.message || 'Gagal menghitung total transaksi.',
+            loading: false,
+          })
+        }
+      }
+    }, 250)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [cart, cartSignature])
+
+  const currentPreview =
+    cart.length > 0 && previewState.signature === cartSignature
+      ? previewState
+      : null
+  const preview = currentPreview?.data ?? null
+  const previewLoading = Boolean(currentPreview?.loading) || Boolean(cart.length > 0 && !currentPreview)
+  const previewError = currentPreview?.error ?? ''
+
+  const displaySubtotal = preview?.subtotal ?? subtotal
+  const discountAmount = preview
+    ? preview.productDiscount + preview.transactionDiscount
     : 0
-  const total = Math.max(0, subtotal - discountAmount)
+  const total = preview?.total ?? subtotal
   const paidAmount = Number(amountPaid) || 0
   const change = Math.max(0, paidAmount - total)
   const paymentError =
     cart.length > 0 &&
+    preview &&
     paidAmount < total &&
     (paymentTouched || amountPaid !== '')
       ? 'Uang diterima kurang dari total'
@@ -91,65 +141,58 @@ export default function KasirPage() {
 
   const handleRemoveItem = (productId) => removeItem(productId)
 
-  const handleSubmit = () => {
-    if (processing) return
+  const handleSubmit = async () => {
+    if (processing || !preview || previewLoading) return
 
     if (cart.length === 0) {
       setCartError('Keranjang masih kosong')
       return
     }
-    if (paidAmount < total) {
+    if (paidAmount < preview.total) {
       setPaymentTouched(true)
       return
     }
+
+    const submittedItems = cart.map((item) => ({
+      productId: item.productId,
+      qty: item.qty,
+    }))
 
     setSubmitError('')
     setPaymentTouched(false)
     setProcessing(true)
 
-    // Simulasi POST transaksi + mutasi stok (frontend saja).
-    submitTimer.current = setTimeout(() => {
-      const paidItems = cart.map((item) => ({ ...item }))
-      const no = createTransactionNo()
-
-      const transaction = {
-        id: no,
-        no,
-        userId: currentUserId,
-        warungId: currentWarungId,
-        items: paidItems,
-        subtotal,
-        discountAmount,
-        total,
-        paid: paidAmount,
-        change,
-        createdAt: new Date().toISOString(),
-      }
-
-      decrementStock(paidItems, transaction)
-      saveTransaction(transaction)
+    try {
+      const transaction = await createTransaction({
+        items: submittedItems,
+        cashReceived: paidAmount,
+      })
 
       setSuccess(transaction)
       clearCart()
-      setDiscountId('')
       setAmountPaid('')
-      setProcessing(false)
       setSheetOpen(false)
-    }, 900)
+      // Stok sudah dikurangi backend; sinkronkan katalog Kasir/QR.
+      reload()
+    } catch (err) {
+      setSubmitError(err.message || 'Gagal menyimpan transaksi.')
+    } finally {
+      setProcessing(false)
+    }
   }
 
   const cartPanelProps = {
     cart,
     products: visibleProducts,
-    discounts,
-    discountId,
-    onDiscountChange: setDiscountId,
+    preview,
+    previewLoading,
+    previewError,
     amountPaid,
     onAmountChange: (value) => {
       setAmountPaid(value.replace(/\D/g, ''))
       setSubmitError('')
     },
-    subtotal,
+    subtotal: displaySubtotal,
     discountAmount,
     total,
     change,

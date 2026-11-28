@@ -12,7 +12,10 @@ import {
   Store,
   UserRound,
 } from 'lucide-react'
-import { ADMIN_WHATSAPP_URL } from '../config/contact.js'
+import {
+  ADMIN_WHATSAPP_URL,
+  HAS_ADMIN_WHATSAPP,
+} from '../config/contact.js'
 import { login } from '../lib/authService.js'
 
 const accessSteps = [
@@ -124,6 +127,23 @@ function VisibilityToggle({ visible, onToggle }) {
   )
 }
 
+function AdminContactLink({ children, className }) {
+  if (!HAS_ADMIN_WHATSAPP) {
+    return <span className={`${className} cursor-not-allowed opacity-60`}>{children}</span>
+  }
+
+  return (
+    <a
+      href={ADMIN_WHATSAPP_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className}
+    >
+      {children}
+    </a>
+  )
+}
+
 function BrandMark({ compact = false }) {
   return (
     <div className="flex items-center gap-3">
@@ -194,7 +214,7 @@ export default function LoginPage({ onSuccess }) {
     setLoading(true)
 
     try {
-      await login({
+      const loggedInUser = await login({
         username: username.trim(),
         password,
         rememberMe: remember,
@@ -205,7 +225,7 @@ export default function LoginPage({ onSuccess }) {
         message: 'Login berhasil. Membuka dashboard kasir...',
       })
       if (onSuccess) {
-        redirectTimer.current = setTimeout(onSuccess, 700)
+        redirectTimer.current = setTimeout(() => onSuccess(loggedInUser), 700)
       }
     } catch (error) {
       setErrors(error.fieldErrors ?? {})
@@ -247,47 +267,6 @@ export default function LoginPage({ onSuccess }) {
               Masuk dengan akun kasir Anda untuk mengelola transaksi dan stok
               dengan aman dalam hitungan detik.
             </p>
-          </div>
-
-          <div className="float-slow relative my-8 rounded-3xl border border-pink-mist bg-surface/85 p-5 shadow-[0_20px_50px_-30px_rgba(194,96,122,0.5)] backdrop-blur">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-semibold text-ink">
-                <ShieldCheck className="size-4 text-pink-dark" />
-                Akses Kasir Aman
-              </div>
-              <span className="rounded-full bg-pink-light px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-pink-dark">
-                Terverifikasi
-              </span>
-            </div>
-
-            <div className="rounded-2xl border border-pink-mist bg-white p-4 dark:bg-surface">
-              <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-full bg-pink-light text-pink-dark">
-                  <UserRound className="size-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-ink">Kasir 03</p>
-                  <p className="text-xs text-ink-muted">Outlet Sudirman</p>
-                </div>
-                <CheckCircle2 className="ml-auto size-5 text-success" />
-              </div>
-
-              <div className="mt-4 space-y-2">
-                <div className="flex h-9 items-center gap-2 rounded-lg border border-pink-mist bg-surface px-3 text-xs text-ink">
-                  <UserRound className="size-3.5 text-ink-muted" />
-                  kasir.03
-                </div>
-                <div className="flex h-9 items-center gap-2 rounded-lg border border-pink-mist bg-surface px-3 text-xs text-ink">
-                  <LockKeyhole className="size-3.5 text-ink-muted" />
-                  ••••••••
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between text-xs text-ink-muted">
-              <span>Sesi aktif di perangkat ini</span>
-              <span className="font-semibold text-pink-dark">Terenkripsi</span>
-            </div>
           </div>
 
           <div className="relative space-y-2.5">
@@ -381,14 +360,9 @@ export default function LoginPage({ onSuccess }) {
                 checked={remember}
                 onChange={(event) => setRemember(event.target.checked)}
               />
-              <a
-                href={ADMIN_WHATSAPP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded text-xs font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
-              >
+              <AdminContactLink className="rounded text-xs font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary">
                 Lupa password?
-              </a>
+              </AdminContactLink>
             </div>
 
             <button
@@ -412,14 +386,9 @@ export default function LoginPage({ onSuccess }) {
 
           <p className="mt-6 text-center text-xs text-ink-muted">
             Belum punya akun kasir?{' '}
-            <a
-              href={ADMIN_WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary"
-            >
+            <AdminContactLink className="rounded font-semibold text-pink-dark transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-primary">
               Hubungi admin outlet
-            </a>
+            </AdminContactLink>
           </p>
         </section>
       </div>
